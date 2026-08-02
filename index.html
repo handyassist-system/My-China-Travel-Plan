@@ -433,13 +433,17 @@
       </div>
     </div>
     <div class="row2">
-      <div class="field"><label>出發時間（選填）</label><input id="tDepartTime" type="time"></div>
+      <div class="field">
+        <label>出發時間（跟著上一個地點）</label>
+        <div style="padding:12px 14px; border-radius:10px; background:var(--bg); border:1px solid var(--line); color:var(--ink); font-weight:600; font-size:15px;" id="tDepartDisplay">--:--</div>
+      </div>
       <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="15"></div>
     </div>
     <div class="field" id="tArriveWrap" style="display:none;">
       <label>抵達時間（自動計算）</label>
       <div style="padding:12px 14px; border-radius:10px; background:var(--seal-soft); color:var(--seal); font-weight:700; font-size:15px;" id="tArriveDisplay">--:--</div>
     </div>
+    <p id="tNoTimeHint" style="font-size:11.5px; color:var(--sub); margin:-8px 0 12px; display:none;">上一個地點還沒設定時間，先幫它填時間才能自動算交通時段</p>
     <div class="row2">
       <div class="field"><label>花費（選填）</label><input id="tExpAmount" type="number" placeholder="0"></div>
       <div class="field"><label>幣別</label>
@@ -450,6 +454,7 @@
       </div>
     </div>
     <div class="field" id="tPayerWrap" style="display:none;"><label>付款人</label><select id="tExpPayer"></select></div>
+    <button id="transDelete" style="display:none; width:100%; padding:12px; border:none; border-radius:var(--radius-md); background:var(--seal-soft); color:var(--seal); font-size:14px; font-weight:600; margin-bottom:10px;">🗑 刪除這段交通</button>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="transCancel">取消</button>
       <button class="btn btn-primary" id="transSave">儲存</button>
@@ -949,16 +954,18 @@ function renderDayList(){
     list.appendChild(empty);
     return;
   }
+  let lastSpotTime = "";
   for(let idx=0; idx<arr.length; idx++){
     const it = arr[idx];
     if(it.type==="spot"){
       list.appendChild(buildSpotCard(it));
+      lastSpotTime = it.time || "";
       const next = arr[idx+1];
       if(next && next.type==="spot"){
         list.appendChild(buildAddTransportGhost(it, next));
       }
     } else if(it.type==="transport"){
-      list.appendChild(buildTransportChip(it));
+      list.appendChild(buildTransportChip(it, lastSpotTime));
     }
   }
 }
@@ -982,17 +989,18 @@ function buildSpotCard(it){
     </div>
   `;
   card.querySelector(".edit").addEventListener("click", ()=>openSpotModal(it));
-  card.querySelector(".del").addEventListener("click", ()=>deleteItem(it.id));
+  card.querySelector(".del").addEventListener("click", ()=>deleteSpotWithAdjacentTransport(it));
   return card;
 }
 
-function buildTransportChip(it){
+function buildTransportChip(it, prevTime){
   const row = document.createElement("div");
   row.className = "transport-row";
   const exp = it.expense && it.expense.amount ? `<span class="exp">${currencySymbol(it.expense.currency)}${it.expense.amount}</span>` : "";
-  const timeStr = (it.departTime && it.arriveTime) ? `${it.departTime}→${it.arriveTime} · ` : "";
+  const arrive = (prevTime && it.duration) ? addMinutesToTime(prevTime, it.duration) : "";
+  const timeStr = (prevTime && arrive) ? `${prevTime}→${arrive} · ` : "";
   row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}約${it.duration||"?"}分${exp}</div>`;
-  row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it));
+  row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it, prevTime));
   return row;
 }
 
@@ -1003,7 +1011,7 @@ function buildAddTransportGhost(prevSpot, nextSpot){
   const mid = (prevSpot.order + nextSpot.order) / 2;
   wrap.querySelector("button").addEventListener("click", ()=>{
     pendingTransport = { day: currentDay, order: mid, id: null };
-    openTransportModal(null);
+    openTransportModal(null, prevSpot.time||"");
   });
   return wrap;
 }
@@ -1212,10 +1220,14 @@ function addMinutesToTime(timeStr, minutes){
   const dh = Math.floor(total/60), dm = total%60;
   return String(dh).padStart(2,"0")+":"+String(dm).padStart(2,"0");
 }
+let currentTransportPrevTime = "";
 function updateArriveDisplay(){
-  const depart = document.getElementById("tDepartTime").value;
+  const depart = currentTransportPrevTime;
   const dur = tDuration.value;
   const wrap = document.getElementById("tArriveWrap");
+  const hint = document.getElementById("tNoTimeHint");
+  document.getElementById("tDepartDisplay").textContent = depart || "--:--";
+  hint.style.display = depart ? "none" : "block";
   if(depart && dur){
     document.getElementById("tArriveDisplay").textContent = addMinutesToTime(depart, dur);
     wrap.style.display = "block";
@@ -1223,32 +1235,37 @@ function updateArriveDisplay(){
     wrap.style.display = "none";
   }
 }
-document.getElementById("tDepartTime").addEventListener("input", updateArriveDisplay);
 tDuration.addEventListener("input", updateArriveDisplay);
+tDuration.addEventListener("change", updateArriveDisplay);
 
-function openTransportModal(it){
+function openTransportModal(it, prevTime){
   pendingTransport.id = it ? it.id : null;
+  currentTransportPrevTime = prevTime || "";
   selectedMode = it ? it.mode : "subway";
   transChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedMode));
-  document.getElementById("tDepartTime").value = it ? (it.departTime||"") : "";
   tDuration.value = it ? (it.duration||"") : "";
   tExpAmount.value = it && it.expense ? (it.expense.amount||"") : "";
   setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : "CNY");
   populatePayerSelect(tExpPayer, tPayerWrap, it && it.expense ? it.expense.payer : "");
   updateArriveDisplay();
+  document.getElementById("transDelete").style.display = it ? "block" : "none";
   transModalMask.classList.add("show");
 }
 function closeTransportModal(){ transModalMask.classList.remove("show"); }
 document.getElementById("transClose").addEventListener("click", closeTransportModal);
 document.getElementById("transCancel").addEventListener("click", closeTransportModal);
+document.getElementById("transDelete").addEventListener("click", async ()=>{
+  if(!pendingTransport.id) return;
+  if(!confirm("確定要刪除這段交通嗎？")) return;
+  try{ await db.collection(COLLECTION).doc(pendingTransport.id).delete(); closeTransportModal(); }
+  catch(e){ console.error("delete transport failed", e); alert("刪除失敗，請檢查網路連線"); }
+});
 transModalMask.addEventListener("click",(e)=>{ if(e.target===transModalMask) closeTransportModal(); });
 
 document.getElementById("transSave").addEventListener("click", async ()=>{
-  const departTime = document.getElementById("tDepartTime").value || "";
   const duration = tDuration.value ? Number(tDuration.value) : 0;
   const data = {
     type:"transport", tripId: activeTripId, mode: selectedMode, duration,
-    departTime, arriveTime: (departTime && duration) ? addMinutesToTime(departTime, duration) : "",
     expense: { amount: tExpAmount.value ? Number(tExpAmount.value) : 0, category: "交通", payer: tExpPayer.value||"", currency: getCurrencyChip(tCurrencyChips) }
   };
   try{
@@ -1268,6 +1285,23 @@ async function deleteItem(id){
   if(!confirm("確定要刪除嗎？")) return;
   try{ await db.collection(COLLECTION).doc(id).delete(); }
   catch(e){ console.error("delete failed", e); alert("刪除失敗，請檢查網路連線"); }
+}
+
+async function deleteSpotWithAdjacentTransport(spot){
+  const arr = dayItems(spot.day);
+  const idx = arr.findIndex(i=>i.id===spot.id);
+  const toDelete = [spot.id];
+  if(idx>0 && arr[idx-1].type==="transport") toDelete.push(arr[idx-1].id);
+  if(idx<arr.length-1 && arr[idx+1].type==="transport") toDelete.push(arr[idx+1].id);
+  const msg = toDelete.length>1
+    ? "確定要刪除嗎？這個地點前後連接的交通段也會一併刪除。"
+    : "確定要刪除嗎？";
+  if(!confirm(msg)) return;
+  try{
+    const batch = db.batch();
+    toDelete.forEach(id=>batch.delete(db.collection(COLLECTION).doc(id)));
+    await batch.commit();
+  }catch(e){ console.error("delete spot+transport failed", e); alert("刪除失敗，請檢查網路連線"); }
 }
 
 // ================= HOLDING (隨手記) =================
