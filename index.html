@@ -96,6 +96,7 @@
   .day-date-row{display:flex; align-items:center; justify-content:space-between; padding:0 20px; margin-top:-2px;}
   .day-date-row .day-date-label{padding:0;}
   #editTripShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 0;}
+  #copyDayShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
 
   /* ---------- Day Tabs ---------- */
   #dayTabs{display:flex; gap:10px; overflow-x:auto; padding:14px 20px 8px; scrollbar-width:none;}
@@ -287,7 +288,10 @@
       <div id="dayTabs"></div>
       <div class="day-date-row">
         <div id="dayDateLabel" class="day-date-label"></div>
-        <button id="editTripShortcut" style="display:none;">✎ 編輯行程</button>
+        <div>
+          <button id="copyDayShortcut" style="display:none;">⧉ 複製整天</button>
+          <button id="editTripShortcut" style="display:none;">✎ 編輯行程</button>
+        </div>
       </div>
       <div id="list"></div>
     </div>
@@ -389,6 +393,7 @@
       </div>
     </div>
     <p id="fTimeHint" style="font-size:11.5px; color:var(--sub); margin:-10px 0 12px; display:none;"></p>
+    <div class="field" id="fDepartWrap" style="display:none;"><label>出發時間（選填，例如出門/離開飯店時間）</label><input id="fDepartTime" type="time"></div>
     <div class="field"><label>停留時間（分鐘，選填）</label><input id="fStayMinutes" type="number" placeholder="例：90"></div>
     <div class="field"><label>名稱（可搜尋自動帶入）</label><input id="fName" type="text" placeholder="輸入地點名稱..."></div>
     <p id="placesStatus" style="font-size:11.5px; color:var(--seal); margin:-10px 0 12px; display:none;"></p>
@@ -553,7 +558,21 @@
   </div>
 </div>
 
+<!-- Copy to day picker -->
+<div class="modal-mask" id="copyDayModalMask">
+  <div class="modal">
+    <button class="close-x" id="copyDayClose">✕</button>
+    <h2 id="copyDayTitle">複製到哪一天？</h2>
+    <div class="field"><label>目標天數</label><select id="copyDaySelect"></select></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="copyDayCancel">取消</button>
+      <button class="btn btn-primary" id="copyDayConfirm">複製</button>
+    </div>
+  </div>
+</div>
+
 <!-- Packing item modal -->
+
 <div class="modal-mask" id="packModalMask">
   <div class="modal">
     <button class="close-x" id="packClose">✕</button>
@@ -865,6 +884,7 @@ function renderItinerary(){
     document.getElementById("dayTabs").innerHTML = "";
     document.getElementById("dayDateLabel").textContent = "";
     document.getElementById("editTripShortcut").style.display = "none";
+    document.getElementById("copyDayShortcut").style.display = "none";
     const list = document.getElementById("list");
     list.innerHTML = "";
     list.appendChild(noTripCTA());
@@ -874,6 +894,7 @@ function renderItinerary(){
   renderDayList();
   document.getElementById("dayDateLabel").textContent = computeDateForDay(currentDay);
   document.getElementById("editTripShortcut").style.display = "block";
+  document.getElementById("copyDayShortcut").style.display = days.length>1 ? "inline-block" : "none";
 }
 function renderDayTabs(){
   const wrap = document.getElementById("dayTabs");
@@ -1023,23 +1044,31 @@ function buildSpotCard(it, d){
   card.className = "spot-card";
   const exp = it.expense && it.expense.amount ? `<div class="spot-expense">💰 ${it.expense.category||''} ${currencySymbol(it.expense.currency)}${it.expense.amount}</div>` : "";
   const stayInfo = (d.arrival && it.stayMinutes) ? `<p class="spot-meta">停留約${it.stayMinutes}分 · ${d.leave} 離開</p>` : "";
+  const departInfo = it.departTime ? `<p class="spot-meta">🚪 ${it.departTime} 出發</p>` : "";
   card.innerHTML = `
     <div class="spot-time">${d.arrival || ""}</div>
     <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
     <div class="spot-body">
       <p class="spot-name">${escapeHtml(it.name)}</p>
       <p class="spot-meta">${escapeHtml(it.category||"其他")}</p>
+      ${departInfo}
       ${stayInfo}
       ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
       ${exp}
     </div>
     <div class="spot-actions">
+      <button class="up" title="上移">▲</button>
+      <button class="down" title="下移">▼</button>
+      <button class="copy" title="複製">⧉</button>
       <button class="edit">✎</button>
       <button class="del">🗑</button>
     </div>
   `;
   card.querySelector(".edit").addEventListener("click", ()=>openSpotModal(it, d));
   card.querySelector(".del").addEventListener("click", ()=>deleteSpotWithAdjacentTransport(it));
+  card.querySelector(".up").addEventListener("click", ()=>moveSpot(it, -1));
+  card.querySelector(".down").addEventListener("click", ()=>moveSpot(it, 1));
+  card.querySelector(".copy").addEventListener("click", ()=>openCopySpotPicker(it));
   return card;
 }
 
@@ -1216,6 +1245,9 @@ function openSpotModal(spot){
     }
     timeHint.style.display = "block";
   }
+  const departWrap = document.getElementById("fDepartWrap");
+  departWrap.style.display = isFirstPosition ? "block" : "none";
+  document.getElementById("fDepartTime").value = spot ? (spot.departTime||"") : "";
   document.getElementById("fStayMinutes").value = spot ? (spot.stayMinutes||"") : "";
   fCategory.value = spot ? (spot.category||"景點") : "景點";
   fName.value = spot ? spot.name : "";
@@ -1251,6 +1283,7 @@ document.getElementById("spotSave").addEventListener("click", async ()=>{
   if(!name){ fName.focus(); return; }
   const data = {
     type:"spot", tripId: activeTripId, day: currentDay, time: fTime.value||"", category: fCategory.value,
+    departTime: document.getElementById("fDepartTime").value || "",
     stayMinutes: document.getElementById("fStayMinutes").value ? Number(document.getElementById("fStayMinutes").value) : 0,
     name, note: fNote.value.trim(),
     expense: { amount: fExpAmount.value ? Number(fExpAmount.value) : 0, category: fExpCategory.value, payer: fExpPayer.value||"", currency: getCurrencyChip(fCurrencyChips) }
@@ -1376,7 +1409,84 @@ async function deleteSpotWithAdjacentTransport(spot){
   }catch(e){ console.error("delete spot+transport failed", e); alert("刪除失敗，請檢查網路連線"); }
 }
 
-// ================= HOLDING (隨手記) =================
+async function moveSpot(spot, direction){
+  const arr = dayItems(spot.day);
+  const idx = arr.findIndex(i=>i.id===spot.id);
+  let neighborIdx = idx + direction;
+  while(neighborIdx>=0 && neighborIdx<arr.length && arr[neighborIdx].type!=="spot"){
+    neighborIdx += direction;
+  }
+  if(neighborIdx<0 || neighborIdx>=arr.length) return;
+  const neighbor = arr[neighborIdx];
+  try{
+    const batch = db.batch();
+    batch.update(db.collection(COLLECTION).doc(spot.id), { order: neighbor.order });
+    batch.update(db.collection(COLLECTION).doc(neighbor.id), { order: spot.order });
+    await batch.commit();
+  }catch(e){ console.error("move spot failed", e); alert("移動失敗，請檢查網路連線"); }
+}
+
+// ================= COPY (spot / whole day) =================
+const copyDayModalMask = document.getElementById("copyDayModalMask");
+let copyContext = null; // { mode: 'spot'|'day', spot? }
+
+function populateCopyDaySelect(excludeCurrent){
+  const sel = document.getElementById("copyDaySelect");
+  sel.innerHTML = "";
+  days.forEach(d=>{
+    if(excludeCurrent && d===currentDay) return;
+    const opt = document.createElement("option");
+    opt.value = d; opt.textContent = d;
+    sel.appendChild(opt);
+  });
+}
+function openCopySpotPicker(spot){
+  copyContext = { mode:"spot", spot };
+  document.getElementById("copyDayTitle").textContent = `複製「${spot.name}」到哪一天？`;
+  populateCopyDaySelect(false);
+  copyDayModalMask.classList.add("show");
+}
+document.getElementById("copyDayShortcut").addEventListener("click", ()=>{
+  copyContext = { mode:"day" };
+  document.getElementById("copyDayTitle").textContent = `把「${currentDay}」整天複製到哪一天？`;
+  populateCopyDaySelect(true);
+  copyDayModalMask.classList.add("show");
+});
+document.getElementById("copyDayClose").addEventListener("click", ()=>copyDayModalMask.classList.remove("show"));
+document.getElementById("copyDayCancel").addEventListener("click", ()=>copyDayModalMask.classList.remove("show"));
+copyDayModalMask.addEventListener("click",(e)=>{ if(e.target===copyDayModalMask) copyDayModalMask.classList.remove("show"); });
+
+document.getElementById("copyDayConfirm").addEventListener("click", async ()=>{
+  const targetDay = document.getElementById("copyDaySelect").value;
+  if(!targetDay || !copyContext) return;
+  try{
+    if(copyContext.mode==="spot"){
+      await copyItemsToDay([copyContext.spot], targetDay);
+    } else {
+      await copyItemsToDay(dayItems(currentDay), targetDay);
+    }
+    copyDayModalMask.classList.remove("show");
+  }catch(e){ console.error("copy failed", e); alert("複製失敗，請檢查網路連線"); }
+});
+
+async function copyItemsToDay(sourceItems, targetDay){
+  if(sourceItems.length===0) return;
+  const targetArr = dayItems(targetDay);
+  let baseOrder = targetArr.length ? targetArr[targetArr.length-1].order + 1000 : 1000;
+  const batch = db.batch();
+  sourceItems.forEach((it, idx)=>{
+    const ref = db.collection(COLLECTION).doc();
+    const data = { ...it };
+    delete data.id;
+    data.day = targetDay;
+    data.order = baseOrder + idx*1000;
+    data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    batch.set(ref, data);
+  });
+  await batch.commit();
+}
+
+
 function renderHolding(){
   const wrap = document.getElementById("holdListInModal");
   wrap.innerHTML = "";
