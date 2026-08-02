@@ -453,16 +453,19 @@
       <div style="padding:12px 14px; border-radius:10px; background:var(--seal-soft); color:var(--seal); font-weight:700; font-size:15px;" id="tArriveDisplay">--:--</div>
     </div>
     <p id="tNoTimeHint" style="font-size:11.5px; color:var(--sub); margin:-8px 0 12px; display:none;">上一個地點還沒設定時間，先幫它填時間才能自動算交通時段</p>
-    <div class="row2">
-      <div class="field"><label>花費（選填）</label><input id="tExpAmount" type="number" placeholder="0"></div>
-      <div class="field"><label>幣別</label>
-        <div class="chip-row" id="tCurrencyChips">
-          <div class="chip" data-v="CNY">¥ 人民幣</div>
-          <div class="chip" data-v="TWD">NT$ 新台幣</div>
+    <button type="button" id="tExpToggle" style="width:100%; padding:11px; border:1px dashed var(--seal); background:var(--seal-soft); color:var(--seal); border-radius:var(--radius-md); font-size:13.5px; font-weight:600; margin-bottom:14px;">＋ 新增花費</button>
+    <div id="tExpFields" style="display:none;">
+      <div class="row2">
+        <div class="field"><label>花費（選填）</label><input id="tExpAmount" type="number" placeholder="0"></div>
+        <div class="field"><label>幣別</label>
+          <div class="chip-row" id="tCurrencyChips">
+            <div class="chip" data-v="CNY">¥ 人民幣</div>
+            <div class="chip" data-v="TWD">NT$ 新台幣</div>
+          </div>
         </div>
       </div>
+      <div class="field" id="tPayerWrap" style="display:none;"><label>付款人</label><select id="tExpPayer"></select></div>
     </div>
-    <div class="field" id="tPayerWrap" style="display:none;"><label>付款人</label><select id="tExpPayer"></select></div>
     <button id="transDelete" style="display:none; width:100%; padding:12px; border:none; border-radius:var(--radius-md); background:var(--seal-soft); color:var(--seal); font-size:14px; font-weight:600; margin-bottom:10px;">🗑 刪除這段交通</button>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="transCancel">取消</button>
@@ -1341,6 +1344,9 @@ function openTransportModal(it, prevTime){
   tExpAmount.value = it && it.expense ? (it.expense.amount||"") : "";
   setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : "CNY");
   populatePayerSelect(tExpPayer, tPayerWrap, it && it.expense ? it.expense.payer : "");
+  const hasExpense = !!(it && it.expense && it.expense.amount);
+  document.getElementById("tExpFields").style.display = hasExpense ? "block" : "none";
+  document.getElementById("tExpToggle").style.display = hasExpense ? "none" : "block";
   updateArriveDisplay();
   document.getElementById("transDelete").style.display = it ? "block" : "none";
   transModalMask.classList.add("show");
@@ -1348,6 +1354,10 @@ function openTransportModal(it, prevTime){
 function closeTransportModal(){ transModalMask.classList.remove("show"); }
 document.getElementById("transClose").addEventListener("click", closeTransportModal);
 document.getElementById("transCancel").addEventListener("click", closeTransportModal);
+document.getElementById("tExpToggle").addEventListener("click", ()=>{
+  document.getElementById("tExpFields").style.display = "block";
+  document.getElementById("tExpToggle").style.display = "none";
+});
 document.getElementById("transDelete").addEventListener("click", async ()=>{
   if(!pendingTransport.id) return;
   if(!confirm("確定要刪除這段交通嗎？")) return;
