@@ -173,7 +173,6 @@
   /* ---------- Expense tab ---------- */
   .exp-total{background:var(--card); border-radius:var(--radius-lg); padding:20px; margin:14px 20px 10px; border:1px solid var(--line); text-align:center;}
   .exp-total .amt{font-size:28px; font-weight:700; color:var(--accent);}
-  .exp-total .twd{font-size:12px; color:var(--sub); margin-top:2px;}
   .exp-rate{display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; font-size:12px; color:var(--sub);}
   .exp-currency-toggle{display:flex; gap:8px; justify-content:center; margin-bottom:10px;}
   .exp-currency-toggle button{border:1px solid var(--line); background:var(--card); color:var(--sub);
@@ -1987,7 +1986,7 @@ const packCatChips = document.getElementById("packCatChips");
 const packName = document.getElementById("packName");
 const packNote = document.getElementById("packNote");
 const PACKING_BASE_CATS = ["藥妝","伴手禮","行李","其他"];
-const PACKING_ICONS = { "藥妝":"💊", "伴手禮":"🎁", "行李":"🧳", "其他":"📌" };
+const PACKING_ICONS = { "藥妝":"💊", "伴手禮":"🎁", "行李":"🧳", "其他":"📌", "證件":"📄", "金錢":"💰", "電子":"📱", "藥品":"💊", "盥洗衣物":"🧴" };
 let selectedPackCat = "藥妝";
 let editingPackId = null;
 
@@ -2044,8 +2043,8 @@ function openPackModal(item){
   packNote.value = item ? (item.note||"") : "";
   packModalMask.classList.add("show");
 }
-document.getElementById("packClose").addEventListener("click", ()=>packModalMask.classList.remove("show"));
-document.getElementById("packCancel").addEventListener("click", ()=>packModalMask.classList.remove("show"));
+document.getElementById("packClose").addEventListener("click", ()=>{ packModalMask.classList.remove("show"); pendingCustomPackCat = null; });
+document.getElementById("packCancel").addEventListener("click", ()=>{ packModalMask.classList.remove("show"); pendingCustomPackCat = null; });
 packModalMask.addEventListener("click",(e)=>{ if(e.target===packModalMask) packModalMask.classList.remove("show"); });
 
 document.getElementById("packSave").addEventListener("click", async ()=>{
@@ -2070,10 +2069,54 @@ async function togglePackChecked(item){
   catch(e){ console.error("toggle packing failed", e); }
 }
 
+const BASIC_PACKING_LIST = [
+  { category:"證件", name:"護照", note:"效期需6個月以上" },
+  { category:"證件", name:"台胞證", note:"" },
+  { category:"證件", name:"機票/訂房證明", note:"電子或紙本備份" },
+  { category:"證件", name:"旅遊保險證明", note:"" },
+  { category:"證件", name:"證件影本/照片備份", note:"手機拍照存一份" },
+  { category:"金錢", name:"人民幣現金", note:"部分小攤販只收現金" },
+  { category:"金錢", name:"信用卡", note:"大陸許多地方僅支付寶/微信支付，Visa/Master不一定能用" },
+  { category:"金錢", name:"少量台幣", note:"回程備用" },
+  { category:"電子", name:"手機充電器", note:"" },
+  { category:"電子", name:"行動電源", note:"" },
+  { category:"電子", name:"轉接頭", note:"備用，大陸插座多為兩孔/三孔" },
+  { category:"電子", name:"SIM卡/eSIM 或 WiFi機", note:"" },
+  { category:"電子", name:"VPN", note:"出發前先在台灣裝好，當地不易下載" },
+  { category:"藥品", name:"個人常備藥", note:"感冒藥、腸胃藥、止痛藥" },
+  { category:"藥品", name:"慢性病處方藥", note:"建議帶中/英文診斷證明" },
+  { category:"藥品", name:"暈車暈船藥", note:"長途交通用" },
+  { category:"盥洗衣物", name:"個人盥洗用品", note:"飯店可能不提供牙刷" },
+  { category:"盥洗衣物", name:"依天氣衣物", note:"" },
+  { category:"盥洗衣物", name:"拖鞋、口罩", note:"" },
+  { category:"其他", name:"隨身小包", note:"放護照、手機、錢" },
+  { category:"其他", name:"保溫瓶", note:"大陸公共場所常有熱水機" },
+];
+
+async function importBasicPackingList(){
+  if(!confirm("要匯入基本必備清單嗎？會加入 "+BASIC_PACKING_LIST.length+" 個項目。")) return;
+  try{
+    const batch = db.batch();
+    BASIC_PACKING_LIST.forEach((it, idx)=>{
+      const ref = db.collection(COLLECTION).doc();
+      batch.set(ref, {
+        type:"packing", tripId: activeTripId, category: it.category, name: it.name, note: it.note,
+        checked:false, order: Date.now()+idx, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    await batch.commit();
+  }catch(e){ console.error("import basic packing list failed", e); alert("匯入失敗，請檢查網路連線"); }
+}
+
 function renderPacking(){
   const wrap = document.getElementById("packingView");
   wrap.innerHTML = "";
   if(!getActiveTrip()){ wrap.appendChild(noTripCTA()); return; }
+  const importBtn = document.createElement("button");
+  importBtn.textContent = "📋 匯入基本必備清單";
+  importBtn.style.cssText = "width:100%; padding:12px; border:1px dashed var(--seal); background:var(--seal-soft); color:var(--seal); border-radius:var(--radius-md); font-size:13.5px; font-weight:600; margin-bottom:14px;";
+  importBtn.addEventListener("click", importBasicPackingList);
+  wrap.appendChild(importBtn);
   const arr = items.filter(i=>i.tripId===activeTripId && i.type==="packing");
   if(arr.length===0){
     const empty = document.createElement("div");
