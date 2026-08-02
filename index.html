@@ -128,6 +128,8 @@
   }
   .spot-main{display:flex; gap:10px; align-items:flex-start;}
   .spot-time{font-size:12px; color:var(--sub); width:38px; flex-shrink:0; padding-top:2px; font-variant-numeric:tabular-nums;}
+  .spot-time-missing{color:var(--seal); font-weight:700; width:52px;}
+  .spot-time-blank{color:var(--line); font-weight:400;}
   .spot-icon{
     width:38px; height:38px; border-radius:11px; background:var(--accent-soft);
     display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0;
@@ -592,6 +594,10 @@
     <h2 id="packModalTitle">新增項目</h2>
     <div class="field"><label>類別</label>
       <div class="chip-row" id="packCatChips"></div>
+      <div class="row2" id="packCustomCatForm" style="display:none; margin-top:8px;">
+        <input id="packCustomCatInput" type="text" placeholder="輸入類別名稱" style="flex:1; padding:12px 14px; border-radius:12px; border:1px solid var(--line); font-size:15px; background:var(--bg);">
+        <button id="packCustomCatConfirm" class="btn btn-ghost" style="flex:0 0 auto; padding:0 16px;">加入</button>
+      </div>
     </div>
     <div class="field"><label>項目名稱</label><input id="packName" type="text" placeholder="例：感冒藥"></div>
     <div class="field"><label>備註（選填）</label><textarea id="packNote" placeholder="數量、品牌、給誰的..."></textarea></div>
@@ -1140,7 +1146,7 @@ function buildSpotCard(it, d){
   if(d.arrival && it.stayMinutes) metaParts.push(`停留${it.stayMinutes}分・${d.leave}離開`);
   card.innerHTML = `
     <div class="spot-main">
-      <div class="spot-time">${d.arrival || ""}</div>
+      <div class="spot-time${d.arrival ? "" : (d.isFirst ? " spot-time-missing" : " spot-time-blank")}">${d.arrival || (d.isFirst ? "待填時間" : "--:--")}</div>
       <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
       <div class="spot-body">
         <p class="spot-name">${escapeHtml(it.name)}</p>
@@ -1985,16 +1991,22 @@ const PACKING_ICONS = { "藥妝":"💊", "伴手禮":"🎁", "行李":"🧳", "�
 let selectedPackCat = "藥妝";
 let editingPackId = null;
 
+let pendingCustomPackCat = null;
+
 function getAllPackingCategories(){
   const custom = [...new Set(
     items.filter(i=>i.tripId===activeTripId && i.type==="packing" && i.category && !PACKING_BASE_CATS.includes(i.category))
          .map(i=>i.category)
   )];
+  if(pendingCustomPackCat && !custom.includes(pendingCustomPackCat) && !PACKING_BASE_CATS.includes(pendingCustomPackCat)){
+    custom.push(pendingCustomPackCat);
+  }
   return [...PACKING_BASE_CATS, ...custom];
 }
 
 function renderPackCatChips(){
   packCatChips.innerHTML = "";
+  document.getElementById("packCustomCatForm").style.display = "none";
   getAllPackingCategories().forEach(cat=>{
     const chip = document.createElement("div");
     chip.className = "chip" + (cat===selectedPackCat ? " active" : "");
@@ -2008,19 +2020,25 @@ function renderPackCatChips(){
   addChip.style.borderStyle = "dashed";
   addChip.textContent = "＋ 自訂";
   addChip.addEventListener("click", ()=>{
-    const name = prompt("輸入新的類別名稱：");
-    if(name && name.trim()){
-      selectedPackCat = name.trim();
-      renderPackCatChips();
-    }
+    document.getElementById("packCustomCatForm").style.display = "flex";
+    document.getElementById("packCustomCatInput").value = "";
+    document.getElementById("packCustomCatInput").focus();
   });
   packCatChips.appendChild(addChip);
 }
+document.getElementById("packCustomCatConfirm").addEventListener("click", ()=>{
+  const name = document.getElementById("packCustomCatInput").value.trim();
+  if(!name) return;
+  pendingCustomPackCat = name;
+  selectedPackCat = name;
+  renderPackCatChips();
+});
 
 function openPackModal(item){
   editingPackId = item ? item.id : null;
   document.getElementById("packModalTitle").textContent = item ? "編輯項目" : "新增項目";
   selectedPackCat = item ? (item.category||"藥妝") : "藥妝";
+  pendingCustomPackCat = (item && item.category && !PACKING_BASE_CATS.includes(item.category)) ? item.category : null;
   renderPackCatChips();
   packName.value = item ? item.name : "";
   packNote.value = item ? (item.note||"") : "";
