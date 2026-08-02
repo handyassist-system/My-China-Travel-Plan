@@ -43,27 +43,41 @@
   /* ---------- Login ---------- */
   #loginScreen{
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    min-height:100vh; padding:32px; gap:20px; text-align:center;
+    min-height:100vh; padding:32px;
+  }
+  .passport-frame{
+    width:100%; max-width:300px; background:var(--card); border:1px solid var(--line);
+    border-radius:var(--radius-lg); padding:36px 26px 30px; text-align:center;
+    box-shadow:0 16px 40px rgba(43,38,32,0.12); position:relative;
+  }
+  .passport-frame::before{
+    content:""; position:absolute; inset:8px; border:1px solid var(--seal-soft); border-radius:14px; pointer-events:none;
   }
   .login-badge{
-    width:72px; height:72px; border-radius:50%; background:var(--seal); color:#fff;
-    display:flex; align-items:center; justify-content:center; font-size:26px;
+    width:64px; height:64px; border-radius:50%; background:var(--seal); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:24px;
+    font-family:var(--serif); font-weight:700;
     border:3px double rgba(255,255,255,0.55); box-shadow:0 10px 24px rgba(179,52,43,0.35);
-    transform:rotate(-6deg);
+    transform:rotate(-6deg); margin:0 auto 16px;
   }
-  #loginScreen h1{font-size:22px; margin:0; font-family:var(--serif); letter-spacing:2px;}
-  #loginScreen p{color:var(--sub); font-size:13px; margin:0 0 8px; letter-spacing:1px;}
+  #loginScreen h1{font-size:21px; margin:0 0 6px; font-family:var(--serif); letter-spacing:2px;}
+  #loginScreen p.eyebrow{color:var(--sub); font-size:12px; margin:0 0 22px; letter-spacing:2px;}
   #pwInput{
-    width:100%; max-width:280px; padding:16px; border-radius:var(--radius-md);
-    border:1px solid var(--line); background:var(--card); font-size:20px;
-    text-align:center; letter-spacing:6px;
+    width:100%; padding:16px; border-radius:var(--radius-md);
+    border:1px solid var(--line); background:var(--bg); font-size:22px;
+    text-align:center; letter-spacing:8px; margin-bottom:6px;
   }
   #pwInput:focus{outline:none; border-color:var(--seal);}
   #loginBtn{
-    width:100%; max-width:280px; padding:14px; border:none; border-radius:var(--radius-md);
-    background:var(--seal); color:#fff; font-size:15px; font-weight:700; letter-spacing:2px;
+    width:100%; padding:14px; border:none; border-radius:var(--radius-md); margin-top:14px;
+    background:var(--seal); color:#fff; font-size:15px; font-weight:700; letter-spacing:4px;
   }
-  #loginError{color:var(--seal); font-size:13px; height:16px;}
+  #loginError{color:var(--seal); font-size:13px; height:16px; margin-top:4px;}
+
+  #logoutBtn{
+    background:none; border:1px solid var(--line); color:var(--sub); font-size:11.5px;
+    padding:5px 12px; border-radius:999px;
+  }
 
   /* ---------- Header ---------- */
   header{padding:22px 20px 4px; position:sticky; top:0; background:var(--paper); z-index:10;}
@@ -118,7 +132,6 @@
 
   /* transport connector */
   .transport-row{display:flex; align-items:center; gap:10px; padding:6px 16px 6px 52px; margin-bottom:4px;}
-  .transport-row .line{width:1px; flex:0 0 auto; align-self:stretch; display:none;}
   .transport-chip{
     display:flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line);
     border-radius:999px; padding:6px 12px; font-size:12px; color:var(--sub); cursor:pointer;
@@ -233,17 +246,22 @@
 
 <div id="app">
   <div id="loginScreen">
-    <div class="login-badge">✈️</div>
-    <h1>大陸旅遊計畫</h1>
-    <p>請輸入授權碼</p>
-    <input id="pwInput" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
-    <div id="loginError"></div>
-    <button id="loginBtn">進入</button>
+    <div class="passport-frame">
+      <div class="login-badge">境</div>
+      <h1>大陸旅遊計畫</h1>
+      <p class="eyebrow">通行憑證 · 請輸入授權碼</p>
+      <input id="pwInput" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
+      <div id="loginError"></div>
+      <button id="loginBtn">進　入</button>
+    </div>
   </div>
 
   <div id="mainScreen" style="display:none;">
     <header>
-      <h1 id="pageTitle">行程</h1>
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h1 id="pageTitle">行程</h1>
+        <button id="logoutBtn" title="登出">登出</button>
+      </div>
       <button id="tripSelBtn" class="trip-sel">目前：<span id="tripSelName">—</span> ▾</button>
     </header>
 
@@ -574,6 +592,12 @@ function enterApp(){
   initAutocomplete();
 }
 if(localStorage.getItem("chinaTravelAuth") === "1"){ enterApp(); }
+
+document.getElementById("logoutBtn").addEventListener("click", ()=>{
+  if(!confirm("確定要登出嗎？")) return;
+  localStorage.removeItem("chinaTravelAuth");
+  location.reload();
+});
 
 // ---------- Firestore listener ----------
 function startListening(){
@@ -1096,7 +1120,7 @@ document.getElementById("assignSave").addEventListener("click", async ()=>{
   const arr = dayItems(day);
   const order = arr.length ? arr[arr.length-1].order + 1000 : 1000;
   try{
-    await db.collection(COLLECTION).doc(assigningHoldId).update({ type:"spot", day, order, category:"其他", time:"", expense:{amount:0,category:""} });
+    await db.collection(COLLECTION).doc(assigningHoldId).update({ type:"spot", day, order, category:"其他", time:"", expense:{amount:0,category:"",payer:""} });
     assignModalMask.classList.remove("show");
   }catch(e){ console.error(e); alert("排入失敗"); }
 });
