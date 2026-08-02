@@ -146,11 +146,11 @@
   }
   .transport-chip .exp{color:var(--green); font-weight:600; margin-left:4px;}
   .add-transport-ghost{
-    padding:6px 16px 6px 52px; margin-bottom:4px;
+    padding:6px 16px 10px 52px; margin-bottom:4px;
   }
   .add-transport-ghost button{
-    border:1px dashed var(--line); background:transparent; color:var(--sub); font-size:12px;
-    border-radius:999px; padding:6px 12px;
+    border:1.5px dashed var(--seal); background:var(--seal-soft); color:var(--seal); font-size:12.5px; font-weight:600;
+    border-radius:999px; padding:7px 14px;
   }
 
   /* ---------- Holding list ---------- */
@@ -170,6 +170,10 @@
   .exp-total .amt{font-size:28px; font-weight:700; color:var(--accent);}
   .exp-total .twd{font-size:12px; color:var(--sub); margin-top:2px;}
   .exp-rate{display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; font-size:12px; color:var(--sub);}
+  .exp-currency-toggle{display:flex; gap:8px; justify-content:center; margin-bottom:10px;}
+  .exp-currency-toggle button{border:1px solid var(--line); background:var(--card); color:var(--sub);
+    font-size:12.5px; padding:6px 14px; border-radius:999px;}
+  .exp-currency-toggle button.active{background:var(--seal); color:#fff; border-color:var(--seal);}
   .exp-rate input{width:56px; padding:5px 7px; border-radius:8px; border:1px solid var(--line); font-size:12px; text-align:center;}
   .exp-cats{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 20px 14px;}
   .exp-cat-pill{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px;}
@@ -248,6 +252,11 @@
   .flight-card .fc-title{font-size:12px; opacity:0.85; margin:0 0 4px;}
   .flight-card .fc-line{font-size:14px; font-weight:600; margin:0;}
   .flight-card .fc-sub{font-size:11.5px; opacity:0.85; margin-top:4px;}
+
+  .warn-banner{
+    background:#FBE9C6; color:#7A4A12; border:1px solid #E8C57D; border-radius:var(--radius-md);
+    padding:12px 14px; font-size:12.5px; line-height:1.5; margin-bottom:10px;
+  }
 </style>
 </head>
 <body>
@@ -284,8 +293,11 @@
 
     <div id="expenseView" style="display:none;">
       <div class="exp-total">
+        <div class="exp-currency-toggle" id="expCurrencyToggle">
+          <button data-v="CNY" class="active">¥ 人民幣</button>
+          <button data-v="TWD">NT$ 新台幣</button>
+        </div>
         <div class="amt" id="expTotal">¥0</div>
-        <div class="twd" id="expTotalTwd">約 NT$0</div>
         <div class="exp-rate">匯率 1¥ = <input id="rateInput" type="number" step="0.1"> NT$</div>
       </div>
       <div class="exp-cats" id="expCats"></div>
@@ -332,6 +344,12 @@
         <div class="field"><label>報到提前（分）</label><input id="fsCheckinBuffer" type="number" placeholder="120"></div>
       </div>
       <div class="field"><label>花費（機票錢，選填）</label><input id="fsExpense" type="number" placeholder="0"></div>
+      <div class="field"><label>幣別</label>
+        <div class="chip-row" id="fsCurrencyChips">
+          <div class="chip" data-v="CNY">¥ 人民幣</div>
+          <div class="chip" data-v="TWD">NT$ 新台幣</div>
+        </div>
+      </div>
       <div class="field" id="fsPayerWrap" style="display:none;"><label>付款人</label><select id="fsExpPayer"></select></div>
       <p style="font-size:12px; color:var(--sub); text-align:center;">修改後自動儲存，並會顯示在第一天／最後一天行程最上方</p>
       </div>
@@ -384,6 +402,12 @@
         </select>
       </div>
     </div>
+    <div class="field"><label>幣別</label>
+      <div class="chip-row" id="fCurrencyChips">
+        <div class="chip" data-v="CNY">¥ 人民幣</div>
+        <div class="chip" data-v="TWD">NT$ 新台幣</div>
+      </div>
+    </div>
     <div class="field" id="fPayerWrap" style="display:none;"><label>付款人</label><select id="fExpPayer"></select></div>
     <div class="field"><label>插入位置</label>
       <select id="fPosition"></select>
@@ -409,8 +433,21 @@
       </div>
     </div>
     <div class="row2">
+      <div class="field"><label>出發時間（選填）</label><input id="tDepartTime" type="time"></div>
       <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="15"></div>
+    </div>
+    <div class="field" id="tArriveWrap" style="display:none;">
+      <label>抵達時間（自動計算）</label>
+      <div style="padding:12px 14px; border-radius:10px; background:var(--seal-soft); color:var(--seal); font-weight:700; font-size:15px;" id="tArriveDisplay">--:--</div>
+    </div>
+    <div class="row2">
       <div class="field"><label>花費（選填）</label><input id="tExpAmount" type="number" placeholder="0"></div>
+      <div class="field"><label>幣別</label>
+        <div class="chip-row" id="tCurrencyChips">
+          <div class="chip" data-v="CNY">¥ 人民幣</div>
+          <div class="chip" data-v="TWD">NT$ 新台幣</div>
+        </div>
+      </div>
     </div>
     <div class="field" id="tPayerWrap" style="display:none;"><label>付款人</label><select id="tExpPayer"></select></div>
     <div class="modal-actions">
@@ -428,7 +465,22 @@
     <p style="font-size:12px; color:var(--sub); margin:-8px 0 12px;">先記下想去的景點/美食，之後再排進行程</p>
     <div id="holdListInModal" style="margin-bottom:16px;"></div>
     <div style="border-top:1px solid var(--line); padding-top:14px;">
+      <div class="field"><label>類型</label>
+        <div class="chip-row" id="hTypeChips">
+          <div class="chip" data-v="spot">📍 景點</div>
+          <div class="chip" data-v="note">📝 備註</div>
+        </div>
+      </div>
+      <div class="field" id="hCategoryWrap"><label>類別</label>
+        <div class="chip-row" id="hCategoryChips">
+          <div class="chip" data-v="景點">🏛️ 景點</div>
+          <div class="chip" data-v="餐廳">🍜 餐廳</div>
+          <div class="chip" data-v="飯店">🛏️ 飯店</div>
+          <div class="chip" data-v="其他">📌 其他</div>
+        </div>
+      </div>
       <div class="field"><label>標題</label><input id="hName" type="text" placeholder="例：朋友推薦的火鍋店"></div>
+      <p id="hPlacesStatus" style="font-size:11.5px; color:var(--seal); margin:-10px 0 12px; display:none;"></p>
       <div class="field"><label>備註（選填）</label><textarea id="hNote" placeholder="還沒查地址、待確認..."></textarea></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="holdCancel">關閉</button>
@@ -844,6 +896,38 @@ function dayItems(day){
   return items.filter(i=>i.tripId===activeTripId && i.day===day && (i.type==="spot"||i.type==="transport")).sort((a,b)=>a.order-b.order);
 }
 
+function timeToMinutes(t){ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; }
+
+function buildFlightWarning(){
+  const s = flightSettings || {};
+  const arr = dayItems(currentDay).filter(i=>i.type==="spot" && i.time);
+  if(arr.length===0) return null;
+
+  if(currentDay === days[0] && s.outArriveTime){
+    const arriveMin = timeToMinutes(s.outArriveTime);
+    const early = arr.filter(i=>timeToMinutes(i.time) < arriveMin);
+    if(early.length){
+      const div = document.createElement("div");
+      div.className = "warn-banner";
+      div.innerHTML = `⚠️ 「${escapeHtml(early[0].name)}」排在 ${early[0].time}，比班機抵達時間（${s.outArriveTime}）還早，可能來不及，建議調整時間`;
+      return div;
+    }
+  }
+  if(currentDay === days[days.length-1] && s.retDepartTime){
+    const buffer = (s.checkinBuffer||0) + (s.homeToAirport||0);
+    const deadline = addMinutesToTime(s.retDepartTime, -buffer);
+    const deadlineMin = timeToMinutes(deadline);
+    const late = arr.filter(i=>timeToMinutes(i.time) > deadlineMin);
+    if(late.length){
+      const div = document.createElement("div");
+      div.className = "warn-banner";
+      div.innerHTML = `⚠️ 「${escapeHtml(late[0].name)}」排在 ${late[0].time}，已超過建議出發去機場時間（${deadline}），可能來不及搭機`;
+      return div;
+    }
+  }
+  return null;
+}
+
 function renderDayList(){
   const list = document.getElementById("list");
   list.innerHTML = "";
@@ -855,6 +939,8 @@ function renderDayList(){
     const c = buildReturnFlightCard();
     if(c) list.appendChild(c);
   }
+  const warn = buildFlightWarning();
+  if(warn) list.appendChild(warn);
   const arr = dayItems(currentDay);
   if(arr.length===0){
     const empty = document.createElement("div");
@@ -880,7 +966,7 @@ function renderDayList(){
 function buildSpotCard(it){
   const card = document.createElement("div");
   card.className = "spot-card";
-  const exp = it.expense && it.expense.amount ? `<div class="spot-expense">💰 ${it.expense.category||''} ¥${it.expense.amount}</div>` : "";
+  const exp = it.expense && it.expense.amount ? `<div class="spot-expense">💰 ${it.expense.category||''} ${currencySymbol(it.expense.currency)}${it.expense.amount}</div>` : "";
   card.innerHTML = `
     <div class="spot-time">${it.time || ""}</div>
     <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
@@ -903,8 +989,9 @@ function buildSpotCard(it){
 function buildTransportChip(it){
   const row = document.createElement("div");
   row.className = "transport-row";
-  const exp = it.expense && it.expense.amount ? `<span class="exp">¥${it.expense.amount}</span>` : "";
-  row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · 約${it.duration||"?"}分${exp}</div>`;
+  const exp = it.expense && it.expense.amount ? `<span class="exp">${currencySymbol(it.expense.currency)}${it.expense.amount}</span>` : "";
+  const timeStr = (it.departTime && it.arriveTime) ? `${it.departTime}→${it.arriveTime} · ` : "";
+  row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}約${it.duration||"?"}分${exp}</div>`;
   row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it));
   return row;
 }
@@ -953,7 +1040,40 @@ function populatePayerSelect(selectEl, wrapEl, currentValue){
   });
 }
 
+function setupCurrencyChips(wrapEl){
+  wrapEl.querySelectorAll(".chip").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      wrapEl.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+      chip.classList.add("active");
+    });
+  });
+}
+function setCurrencyChip(wrapEl, value){
+  const v = value || "CNY";
+  wrapEl.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===v));
+}
+function getCurrencyChip(wrapEl){
+  const active = wrapEl.querySelector(".chip.active");
+  return active ? active.dataset.v : "CNY";
+}
+function convertCurrency(amount, from, to, rate){
+  from = from || "CNY"; to = to || "CNY";
+  if(from===to) return amount;
+  if(from==="CNY" && to==="TWD") return amount * rate;
+  if(from==="TWD" && to==="CNY") return amount / rate;
+  return amount;
+}
+function currencySymbol(c){ return c==="TWD" ? "NT$" : "¥"; }
+
+const fCurrencyChips = document.getElementById("fCurrencyChips");
+const tCurrencyChips = document.getElementById("tCurrencyChips");
+const fsCurrencyChips = document.getElementById("fsCurrencyChips");
+setupCurrencyChips(fCurrencyChips);
+setupCurrencyChips(tCurrencyChips);
+setupCurrencyChips(fsCurrencyChips);
+
 let placesReady = false;
+let holdAutocomplete = null;
 function initAutocomplete(){
   try{
     if(window.google && google.maps && google.maps.places){
@@ -965,24 +1085,38 @@ function initAutocomplete(){
           if(p.formatted_address && !fNote.value){ fNote.value = p.formatted_address; }
         }
       });
+      const hNameInput = document.getElementById("hName");
+      holdAutocomplete = new google.maps.places.Autocomplete(hNameInput, { fields:["name","formatted_address"] });
+      holdAutocomplete.addListener("place_changed", ()=>{
+        const p = holdAutocomplete.getPlace();
+        const hNoteInput = document.getElementById("hNote");
+        if(p && p.name){
+          hNameInput.value = p.name;
+          if(p.formatted_address && !hNoteInput.value && selectedHoldType==="spot"){ hNoteInput.value = p.formatted_address; }
+        }
+      });
       placesReady = true;
       window.__gmapsStatus = "loaded";
     }
   }catch(e){ console.error("Places autocomplete init failed", e); window.__gmapsStatus = "init_error"; }
 }
 
-function checkPlacesStatus(){
-  const el = document.getElementById("placesStatus");
-  // Retry init in case the script finished loading after our first attempt
-  if(!placesReady && window.google && google.maps && google.maps.places){ initAutocomplete(); }
-  if(placesReady){ el.style.display = "none"; return; }
+function placesStatusMessage(){
   const msgs = {
     loading: "🔄 地點搜尋連線中，稍候可重新打字試試",
     auth_failed: "🔴 Google地點搜尋未連線（金鑰或帳單設定問題），可直接手動輸入",
     load_error: "🔴 Google地圖載入失敗（網路或金鑰問題），可直接手動輸入",
     init_error: "🔴 地點搜尋初始化失敗，可直接手動輸入"
   };
-  el.textContent = msgs[window.__gmapsStatus] || "🔴 Google地點搜尋未連線，可直接手動輸入";
+  return msgs[window.__gmapsStatus] || "🔴 Google地點搜尋未連線，可直接手動輸入";
+}
+
+function checkPlacesStatus(elId){
+  const el = document.getElementById(elId || "placesStatus");
+  // Retry init in case the script finished loading after our first attempt
+  if(!placesReady && window.google && google.maps && google.maps.places){ initAutocomplete(); }
+  if(placesReady){ el.style.display = "none"; return; }
+  el.textContent = placesStatusMessage();
   el.style.display = "block";
 }
 
@@ -1009,6 +1143,7 @@ function openSpotModal(spot){
   fNote.value = spot ? (spot.note||"") : "";
   fExpAmount.value = spot && spot.expense ? (spot.expense.amount||"") : "";
   fExpCategory.value = spot && spot.expense ? (spot.expense.category||"餐飲") : "餐飲";
+  setCurrencyChip(fCurrencyChips, spot && spot.expense ? spot.expense.currency : "CNY");
   populatePayerSelect(fExpPayer, fPayerWrap, spot && spot.expense ? spot.expense.payer : "");
   populatePositionSelect(currentDay, spot ? spot.id : null);
   spotModalMask.classList.add("show");
@@ -1038,7 +1173,7 @@ document.getElementById("spotSave").addEventListener("click", async ()=>{
   const data = {
     type:"spot", tripId: activeTripId, day: currentDay, time: fTime.value||"", category: fCategory.value,
     name, note: fNote.value.trim(),
-    expense: { amount: fExpAmount.value ? Number(fExpAmount.value) : 0, category: fExpCategory.value, payer: fExpPayer.value||"" }
+    expense: { amount: fExpAmount.value ? Number(fExpAmount.value) : 0, category: fExpCategory.value, payer: fExpPayer.value||"", currency: getCurrencyChip(fCurrencyChips) }
   };
   try{
     if(editingSpotId){
@@ -1069,13 +1204,38 @@ transChips.querySelectorAll(".chip").forEach(chip=>{
   });
 });
 
+function addMinutesToTime(timeStr, minutes){
+  if(!timeStr) return "";
+  const [h,m] = timeStr.split(":").map(Number);
+  let total = h*60+m+Number(minutes||0);
+  total = ((total%1440)+1440)%1440;
+  const dh = Math.floor(total/60), dm = total%60;
+  return String(dh).padStart(2,"0")+":"+String(dm).padStart(2,"0");
+}
+function updateArriveDisplay(){
+  const depart = document.getElementById("tDepartTime").value;
+  const dur = tDuration.value;
+  const wrap = document.getElementById("tArriveWrap");
+  if(depart && dur){
+    document.getElementById("tArriveDisplay").textContent = addMinutesToTime(depart, dur);
+    wrap.style.display = "block";
+  } else {
+    wrap.style.display = "none";
+  }
+}
+document.getElementById("tDepartTime").addEventListener("input", updateArriveDisplay);
+tDuration.addEventListener("input", updateArriveDisplay);
+
 function openTransportModal(it){
   pendingTransport.id = it ? it.id : null;
   selectedMode = it ? it.mode : "subway";
   transChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedMode));
+  document.getElementById("tDepartTime").value = it ? (it.departTime||"") : "";
   tDuration.value = it ? (it.duration||"") : "";
   tExpAmount.value = it && it.expense ? (it.expense.amount||"") : "";
+  setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : "CNY");
   populatePayerSelect(tExpPayer, tPayerWrap, it && it.expense ? it.expense.payer : "");
+  updateArriveDisplay();
   transModalMask.classList.add("show");
 }
 function closeTransportModal(){ transModalMask.classList.remove("show"); }
@@ -1084,9 +1244,12 @@ document.getElementById("transCancel").addEventListener("click", closeTransportM
 transModalMask.addEventListener("click",(e)=>{ if(e.target===transModalMask) closeTransportModal(); });
 
 document.getElementById("transSave").addEventListener("click", async ()=>{
+  const departTime = document.getElementById("tDepartTime").value || "";
+  const duration = tDuration.value ? Number(tDuration.value) : 0;
   const data = {
-    type:"transport", tripId: activeTripId, mode: selectedMode, duration: tDuration.value ? Number(tDuration.value) : 0,
-    expense: { amount: tExpAmount.value ? Number(tExpAmount.value) : 0, category: "交通", payer: tExpPayer.value||"" }
+    type:"transport", tripId: activeTripId, mode: selectedMode, duration,
+    departTime, arriveTime: (departTime && duration) ? addMinutesToTime(departTime, duration) : "",
+    expense: { amount: tExpAmount.value ? Number(tExpAmount.value) : 0, category: "交通", payer: tExpPayer.value||"", currency: getCurrencyChip(tCurrencyChips) }
   };
   try{
     if(pendingTransport.id){
@@ -1118,22 +1281,55 @@ function renderHolding(){
     return;
   }
   arr.forEach(h=>{
+    const isSpotType = (h.holdType||"spot") === "spot";
+    const tagIcon = isSpotType ? (CATEGORY_ICON[h.category] || "📍") : "📝";
+    const tagLabel = isSpotType ? (h.category||"景點") : "備註";
     const card = document.createElement("div");
     card.className = "hold-card";
     card.innerHTML = `
-      <p class="hname">${escapeHtml(h.name)}</p>
+      <p class="hname">${tagIcon} ${escapeHtml(h.name)} <span style="font-size:11px; color:var(--sub); font-weight:400;">（${escapeHtml(tagLabel)}）</span></p>
       ${h.note ? `<p class="hnote">${escapeHtml(h.note)}</p>` : ""}
       <div class="hold-actions">
-        <button class="assign">排進行程</button>
+        ${isSpotType ? `<button class="assign">排進行程</button>` : ""}
         <button class="del">刪除</button>
       </div>`;
-    card.querySelector(".assign").addEventListener("click", ()=>openAssignModal(h.id));
+    if(isSpotType){ card.querySelector(".assign").addEventListener("click", ()=>openAssignModal(h.id)); }
     card.querySelector(".del").addEventListener("click", ()=>deleteItem(h.id));
     wrap.appendChild(card);
   });
 }
 
 const holdModalMask = document.getElementById("holdModalMask");
+const hTypeChips = document.getElementById("hTypeChips");
+const hCategoryChips = document.getElementById("hCategoryChips");
+const hCategoryWrap = document.getElementById("hCategoryWrap");
+let selectedHoldType = "spot";
+let selectedHoldCategory = "景點";
+
+function updateHoldTypeUI(){
+  hCategoryWrap.style.display = selectedHoldType==="spot" ? "block" : "none";
+  if(selectedHoldType==="spot"){ checkPlacesStatus("hPlacesStatus"); }
+  else { document.getElementById("hPlacesStatus").style.display = "none"; }
+}
+hTypeChips.querySelectorAll(".chip").forEach(chip=>{
+  chip.addEventListener("click", ()=>{
+    selectedHoldType = chip.dataset.v;
+    hTypeChips.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+    chip.classList.add("active");
+    updateHoldTypeUI();
+  });
+});
+hCategoryChips.querySelectorAll(".chip").forEach(chip=>{
+  chip.addEventListener("click", ()=>{
+    selectedHoldCategory = chip.dataset.v;
+    hCategoryChips.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+    chip.classList.add("active");
+  });
+});
+// default active state
+hTypeChips.querySelector('[data-v="spot"]').classList.add("active");
+hCategoryChips.querySelector('[data-v="景點"]').classList.add("active");
+
 document.getElementById("holdClose").addEventListener("click", ()=>holdModalMask.classList.remove("show"));
 document.getElementById("holdCancel").addEventListener("click", ()=>holdModalMask.classList.remove("show"));
 holdModalMask.addEventListener("click",(e)=>{ if(e.target===holdModalMask) holdModalMask.classList.remove("show"); });
@@ -1141,10 +1337,12 @@ document.getElementById("holdSave").addEventListener("click", async ()=>{
   const name = document.getElementById("hName").value.trim();
   if(!name){ document.getElementById("hName").focus(); return; }
   try{
-    await db.collection(COLLECTION).add({
+    const data = {
       type:"holding", tripId: activeTripId, day: HOLDING, name, note: document.getElementById("hNote").value.trim(),
-      order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+      holdType: selectedHoldType, order: Date.now(), createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if(selectedHoldType==="spot"){ data.category = selectedHoldCategory; }
+    await db.collection(COLLECTION).add(data);
     document.getElementById("hName").value=""; document.getElementById("hNote").value="";
     document.getElementById("hName").focus();
   }catch(e){ console.error(e); alert("儲存失敗"); }
@@ -1165,18 +1363,21 @@ document.getElementById("assignSave").addEventListener("click", async ()=>{
   const day = document.getElementById("assignDaySelect").value;
   const arr = dayItems(day);
   const order = arr.length ? arr[arr.length-1].order + 1000 : 1000;
+  const holdItem = items.find(i=>i.id===assigningHoldId);
+  const category = (holdItem && holdItem.category) || "其他";
   try{
-    await db.collection(COLLECTION).doc(assigningHoldId).update({ type:"spot", day, order, category:"其他", time:"", expense:{amount:0,category:"",payer:""} });
+    await db.collection(COLLECTION).doc(assigningHoldId).update({ type:"spot", day, order, category, time:"", expense:{amount:0,category:"",payer:"",currency:"CNY"} });
     assignModalMask.classList.remove("show");
   }catch(e){ console.error(e); alert("排入失敗"); }
 });
 
 // ================= EXPENSE =================
+let expDisplayCurrency = localStorage.getItem("expDisplayCurrency") || "CNY";
+
 function renderExpense(){
   if(!getActiveTrip()){
     const listWrap = document.getElementById("expList");
     document.getElementById("expTotal").textContent = "¥0";
-    document.getElementById("expTotalTwd").textContent = "約 NT$0";
     document.getElementById("expCats").innerHTML = "";
     document.getElementById("expByMember").innerHTML = "";
     listWrap.innerHTML = "";
@@ -1185,22 +1386,25 @@ function renderExpense(){
   }
   const rate = Number(localStorage.getItem("cnyToTwdRate")) || 4.5;
   document.getElementById("rateInput").value = rate;
+  document.querySelectorAll("#expCurrencyToggle button").forEach(b=>b.classList.toggle("active", b.dataset.v===expDisplayCurrency));
+  const sym = currencySymbol(expDisplayCurrency);
+
   const all = items.filter(i=>i.tripId===activeTripId && (i.type==="spot"||i.type==="transport") && i.expense && i.expense.amount);
   if(flightSettings && flightSettings.expense){
-    all.push({ type:"flight", day:"航班", order:-1, name:"機票", expense:{ amount:flightSettings.expense, category:"交通", payer: flightSettings.expensePayer||"" } });
+    all.push({ type:"flight", day:"航班", order:-1, name:"機票", expense:{ amount:flightSettings.expense, category:"交通", payer: flightSettings.expensePayer||"", currency: flightSettings.expenseCurrency||"CNY" } });
   }
-  const total = all.reduce((s,i)=>s+i.expense.amount,0);
-  document.getElementById("expTotal").textContent = "¥"+total.toLocaleString();
-  document.getElementById("expTotalTwd").textContent = "約 NT$"+Math.round(total*rate).toLocaleString();
+  const converted = i => convertCurrency(i.expense.amount, i.expense.currency||"CNY", expDisplayCurrency, rate);
+  const total = all.reduce((s,i)=>s+converted(i),0);
+  document.getElementById("expTotal").textContent = sym+Math.round(total).toLocaleString();
 
   const cats = {};
-  all.forEach(i=>{ const c=i.expense.category||"其他"; cats[c]=(cats[c]||0)+i.expense.amount; });
+  all.forEach(i=>{ const c=i.expense.category||"其他"; cats[c]=(cats[c]||0)+converted(i); });
   const catWrap = document.getElementById("expCats");
   catWrap.innerHTML = "";
   Object.keys(cats).forEach(c=>{
     const p = document.createElement("div");
     p.className = "exp-cat-pill";
-    p.innerHTML = `<div class="c-label">${escapeHtml(c)}</div><div class="c-amt">¥${cats[c].toLocaleString()}</div>`;
+    p.innerHTML = `<div class="c-label">${escapeHtml(c)}</div><div class="c-amt">${sym}${Math.round(cats[c]).toLocaleString()}</div>`;
     catWrap.appendChild(p);
   });
 
@@ -1210,11 +1414,11 @@ function renderExpense(){
   if(trip && trip.members && trip.members.length){
     const byMember = {};
     trip.members.forEach(m=>{ byMember[m] = 0; });
-    all.forEach(i=>{ const p = i.expense.payer; if(p && byMember.hasOwnProperty(p)) byMember[p] += i.expense.amount; });
+    all.forEach(i=>{ const p = i.expense.payer; if(p && byMember.hasOwnProperty(p)) byMember[p] += converted(i); });
     trip.members.forEach(m=>{
       const p = document.createElement("div");
       p.className = "exp-cat-pill";
-      p.innerHTML = `<div class="c-label">👤 ${escapeHtml(m)}</div><div class="c-amt">¥${byMember[m].toLocaleString()}</div>`;
+      p.innerHTML = `<div class="c-label">👤 ${escapeHtml(m)}</div><div class="c-amt">${sym}${Math.round(byMember[m]).toLocaleString()}</div>`;
       memberWrap.appendChild(p);
     });
   }
@@ -1233,13 +1437,21 @@ function renderExpense(){
     const row = document.createElement("div");
     row.className = "exp-item";
     const label = i.type==="transport" ? (TRANSPORT_LABEL[i.mode]||"交通") : i.name;
-    row.innerHTML = `<div><div class="l">${escapeHtml(label)}</div><div class="d">${escapeHtml(i.day)} · ${escapeHtml(i.expense.category||"")}</div></div><div class="r">¥${i.expense.amount.toLocaleString()}</div>`;
+    const origSym = currencySymbol(i.expense.currency||"CNY");
+    row.innerHTML = `<div><div class="l">${escapeHtml(label)}</div><div class="d">${escapeHtml(i.day)} · ${escapeHtml(i.expense.category||"")}</div></div><div class="r">${origSym}${i.expense.amount.toLocaleString()}</div>`;
     listWrap.appendChild(row);
   });
 }
 document.getElementById("rateInput").addEventListener("change", (e)=>{
   localStorage.setItem("cnyToTwdRate", e.target.value);
   renderExpense();
+});
+document.querySelectorAll("#expCurrencyToggle button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    expDisplayCurrency = btn.dataset.v;
+    localStorage.setItem("expDisplayCurrency", expDisplayCurrency);
+    renderExpense();
+  });
 });
 
 // ================= FLIGHT =================
@@ -1277,6 +1489,9 @@ function initFlightFormOnce(){
   ids.forEach(id=>{
     document.getElementById(id).addEventListener("change", scheduleSaveFlight);
   });
+  fsCurrencyChips.querySelectorAll(".chip").forEach(chip=>{
+    chip.addEventListener("click", scheduleSaveFlight);
+  });
 }
 
 function scheduleSaveFlight(){
@@ -1295,6 +1510,7 @@ async function saveFlightSettings(){
     homeToAirport: g("fsHomeToAirport") ? Number(g("fsHomeToAirport")) : 0,
     checkinBuffer: g("fsCheckinBuffer") ? Number(g("fsCheckinBuffer")) : 0,
     expense: g("fsExpense") ? Number(g("fsExpense")) : 0,
+    expenseCurrency: getCurrencyChip(fsCurrencyChips),
     expensePayer: g("fsExpPayer") || ""
   };
   try{
@@ -1322,6 +1538,7 @@ function renderFlightForm(){
   setv("fsRetDepartTime", s.retDepartTime); setv("fsRetArriveTime", s.retArriveTime);
   setv("fsHomeToAirport", s.homeToAirport); setv("fsCheckinBuffer", s.checkinBuffer);
   setv("fsExpense", s.expense);
+  setCurrencyChip(fsCurrencyChips, s.expenseCurrency);
   populatePayerSelect(document.getElementById("fsExpPayer"), document.getElementById("fsPayerWrap"), s.expensePayer);
 }
 
@@ -1367,6 +1584,7 @@ fab.addEventListener("click", ()=>{
 document.getElementById("memoFab").addEventListener("click", ()=>{
   renderHolding();
   holdModalMask.classList.add("show");
+  checkPlacesStatus("hPlacesStatus");
 });
 
 // ================= PACKING =================
