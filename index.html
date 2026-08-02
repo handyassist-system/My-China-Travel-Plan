@@ -233,6 +233,7 @@
     font-size:15px; background:var(--bg); font-family:inherit;
   }
   .field textarea{resize:vertical; min-height:56px;}
+  .field input:disabled{background:var(--seal-soft); color:var(--seal); font-weight:700; opacity:1; border-color:var(--seal-soft);}
   .row2{display:flex; gap:10px;}
   .row2 .field{flex:1;}
   .chip-row{display:flex; gap:8px; flex-wrap:wrap;}
@@ -387,6 +388,7 @@
         </select>
       </div>
     </div>
+    <p id="fTimeHint" style="font-size:11.5px; color:var(--sub); margin:-10px 0 12px; display:none;"></p>
     <div class="field"><label>停留時間（分鐘，選填）</label><input id="fStayMinutes" type="number" placeholder="例：90"></div>
     <div class="field"><label>名稱（可搜尋自動帶入）</label><input id="fName" type="text" placeholder="輸入地點名稱..."></div>
     <p id="placesStatus" style="font-size:11.5px; color:var(--seal); margin:-10px 0 12px; display:none;"></p>
@@ -904,50 +906,72 @@ function dayItems(day){
 
 function timeToMinutes(t){ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; }
 
-function buildFlightWarning(){
+// Single source of truth for the day's schedule: only the FIRST spot's stored
+// time is an anchor; every following spot/transport time is derived from it.
+function computeDerivedTimes(day){
+  const arr = dayItems(day);
+  const map = {};
   const s = flightSettings || {};
-  const arr = dayItems(currentDay).filter(i=>i.type==="spot" && i.time);
+  let clock = (day===days[0] && s.outArriveTime) ? s.outArriveTime : null;
+  arr.forEach((it, idx)=>{
+    if(it.type==="spot"){
+      const arrival = (clock!==null) ? clock : (idx===0 ? (it.time||"") : "");
+      const leave = (arrival && it.stayMinutes) ? addMinutesToTime(arrival, it.stayMinutes) : arrival;
+      map[it.id] = { arrival, leave, isFirst: idx===0 && clock===null };
+      clock = leave || null;
+    } else if(it.type==="transport"){
+      const depart = clock || "";
+      const arrive = (depart && it.duration) ? addMinutesToTime(depart, it.duration) : "";
+      map[it.id] = { depart, arrive };
+      clock = arrive || clock;
+    }
+  });
+  return map;
+}
+
+function buildFlightWarning(derived){
+  const s = flightSettings || {};
+  const arr = dayItems(currentDay);
   if(arr.length===0) return null;
 
-  if(currentDay === days[0] && s.outArriveTime){
-    const arriveMin = timeToMinutes(s.outArriveTime);
-    const early = arr.filter(i=>timeToMinutes(i.time) < arriveMin);
-    if(early.length){
-      const div = document.createElement("div");
-      div.className = "warn-banner";
-      div.innerHTML = `⚠️ 「${escapeHtml(early[0].name)}」排在 ${early[0].time}，比班機抵達時間（${s.outArriveTime}）還早，可能來不及，建議調整時間`;
-      return div;
-    }
-  }
   if(currentDay === days[days.length-1] && s.retDepartTime){
     const buffer = (s.checkinBuffer||0) + (s.homeToAirport||0);
     const deadline = addMinutesToTime(s.retDepartTime, -buffer);
     const deadlineMin = timeToMinutes(deadline);
-    const late = arr.filter(i=>timeToMinutes(i.time) > deadlineMin);
-    if(late.length){
+    const lastItem = arr[arr.length-1];
+    const d = derived[lastItem.id];
+    const estArrival = lastItem.type==="transport" ? d.arrive : d.leave;
+    if(estArrival && timeToMinutes(estArrival) > deadlineMin){
       const div = document.createElement("div");
       div.className = "warn-banner";
-      div.innerHTML = `⚠️ 「${escapeHtml(late[0].name)}」排在 ${late[0].time}，已超過建議出發去機場時間（${deadline}），可能來不及搭機`;
+      div.innerHTML = `⚠️ 預估 ${estArrival} 才會離開最後一站，已超過建議出發去機場時間（${deadline}），可能來不及搭機`;
       return div;
     }
   }
   return null;
 }
 
+let currentDayDerived = {};
+
 function renderDayList(){
   const list = document.getElementById("list");
   list.innerHTML = "";
+  const derived = computeDerivedTimes(currentDay);
+  currentDayDerived = derived;
+  const s = flightSettings || {};
+  const arr = dayItems(currentDay);
+
   if(currentDay === days[0]){
     const c = buildOutboundFlightCard();
     if(c) list.appendChild(c);
+    if(s.outArriveTime && arr.length>0 && arr[0].type==="spot"){
+      list.appendChild(buildAirportTransportGhost(arr[0], s.outArriveTime, "before"));
+    }
   }
-  if(currentDay === days[days.length-1]){
-    const c = buildReturnFlightCard();
-    if(c) list.appendChild(c);
-  }
-  const warn = buildFlightWarning();
+
+  const warn = buildFlightWarning(derived);
   if(warn) list.appendChild(warn);
-  const arr = dayItems(currentDay);
+
   if(arr.length===0){
     const empty = document.createElement("div");
     empty.className = "empty";
@@ -955,34 +979,52 @@ function renderDayList(){
     list.appendChild(empty);
     return;
   }
-  let lastSpotTime = "";
   for(let idx=0; idx<arr.length; idx++){
     const it = arr[idx];
     if(it.type==="spot"){
-      list.appendChild(buildSpotCard(it));
-      lastSpotTime = computeSpotLeaveTime(it);
+      list.appendChild(buildSpotCard(it, derived[it.id]));
       const next = arr[idx+1];
       if(next && next.type==="spot"){
-        list.appendChild(buildAddTransportGhost(it, next));
+        list.appendChild(buildAddTransportGhost(it, next, derived));
       }
     } else if(it.type==="transport"){
-      list.appendChild(buildTransportChip(it, lastSpotTime));
+      list.appendChild(buildTransportChip(it, derived[it.id]));
     }
+  }
+
+  if(currentDay === days[days.length-1] && s.retDepartTime && arr.length>0){
+    const lastItem = arr[arr.length-1];
+    if(lastItem.type==="spot"){
+      list.appendChild(buildAirportTransportGhost(lastItem, derived[lastItem.id].leave, "after"));
+    }
+  }
+
+  if(currentDay === days[days.length-1]){
+    const c = buildReturnFlightCard();
+    if(c) list.appendChild(c);
   }
 }
 
-function computeSpotLeaveTime(spot){
-  if(spot.time && spot.stayMinutes){ return addMinutesToTime(spot.time, spot.stayMinutes); }
-  return spot.time || "";
+function buildAirportTransportGhost(spot, refTime, position){
+  const wrap = document.createElement("div");
+  wrap.className = "add-transport-ghost";
+  wrap.innerHTML = position==="before" ? `<button>＋ 接機交通</button>` : `<button>＋ 送機交通</button>`;
+  wrap.querySelector("button").addEventListener("click", ()=>{
+    const order = position==="before" ? (spot.order - 1000) : (spot.order + 1000);
+    pendingTransport = { day: currentDay, order, id: null };
+    openTransportModal(null, refTime||"");
+  });
+  return wrap;
 }
 
-function buildSpotCard(it){
+function buildSpotCard(it, d){
+  d = d || { arrival: it.time||"", leave: it.time||"", isFirst:true };
   const card = document.createElement("div");
   card.className = "spot-card";
   const exp = it.expense && it.expense.amount ? `<div class="spot-expense">💰 ${it.expense.category||''} ${currencySymbol(it.expense.currency)}${it.expense.amount}</div>` : "";
-  const stayInfo = (it.time && it.stayMinutes) ? `<p class="spot-meta">停留約${it.stayMinutes}分 · ${computeSpotLeaveTime(it)} 離開</p>` : "";
+  const stayInfo = (d.arrival && it.stayMinutes) ? `<p class="spot-meta">停留約${it.stayMinutes}分 · ${d.leave} 離開</p>` : "";
   card.innerHTML = `
-    <div class="spot-time">${it.time || ""}</div>
+    <div class="spot-time">${d.arrival || ""}</div>
     <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
     <div class="spot-body">
       <p class="spot-name">${escapeHtml(it.name)}</p>
@@ -996,30 +1038,31 @@ function buildSpotCard(it){
       <button class="del">🗑</button>
     </div>
   `;
-  card.querySelector(".edit").addEventListener("click", ()=>openSpotModal(it));
+  card.querySelector(".edit").addEventListener("click", ()=>openSpotModal(it, d));
   card.querySelector(".del").addEventListener("click", ()=>deleteSpotWithAdjacentTransport(it));
   return card;
 }
 
-function buildTransportChip(it, prevTime){
+function buildTransportChip(it, d){
+  d = d || { depart:"", arrive:"" };
   const row = document.createElement("div");
   row.className = "transport-row";
   const exp = it.expense && it.expense.amount ? `<span class="exp">${currencySymbol(it.expense.currency)}${it.expense.amount}</span>` : "";
-  const arrive = (prevTime && it.duration) ? addMinutesToTime(prevTime, it.duration) : "";
-  const timeStr = (prevTime && arrive) ? `${prevTime}→${arrive} · ` : "";
+  const timeStr = (d.depart && d.arrive) ? `${d.depart}→${d.arrive} · ` : "";
   row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}約${it.duration||"?"}分${exp}</div>`;
-  row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it, prevTime));
+  row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it, d.depart));
   return row;
 }
 
-function buildAddTransportGhost(prevSpot, nextSpot){
+function buildAddTransportGhost(prevSpot, nextSpot, derived){
   const wrap = document.createElement("div");
   wrap.className = "add-transport-ghost";
   wrap.innerHTML = `<button>＋ 交通</button>`;
   const mid = (prevSpot.order + nextSpot.order) / 2;
+  const prevLeave = derived[prevSpot.id] ? derived[prevSpot.id].leave : "";
   wrap.querySelector("button").addEventListener("click", ()=>{
     pendingTransport = { day: currentDay, order: mid, id: null };
-    openTransportModal(null, computeSpotLeaveTime(prevSpot));
+    openTransportModal(null, prevLeave);
   });
   return wrap;
 }
@@ -1153,7 +1196,26 @@ function populatePositionSelect(day, preselectId){
 function openSpotModal(spot){
   editingSpotId = spot ? spot.id : null;
   document.getElementById("spotModalTitle").textContent = spot ? "編輯地點" : "新增地點";
-  fTime.value = spot ? (spot.time||"") : "";
+  const arr = dayItems(currentDay);
+  const hasFlightAnchor = (currentDay===days[0]) && !!(flightSettings && flightSettings.outArriveTime);
+  const isFirstPosition = spot ? (arr.length>0 && arr[0].id===spot.id) : (arr.length===0);
+  const isEditable = isFirstPosition && !hasFlightAnchor;
+  const timeHint = document.getElementById("fTimeHint");
+  if(isEditable){
+    fTime.disabled = false;
+    fTime.value = spot ? (spot.time||"") : "";
+    timeHint.style.display = "none";
+  } else {
+    fTime.disabled = true;
+    const derived = computeDerivedTimes(currentDay);
+    fTime.value = spot && derived[spot.id] ? (derived[spot.id].arrival||"") : (isFirstPosition && hasFlightAnchor ? (flightSettings.outArriveTime||"") : "");
+    if(isFirstPosition && hasFlightAnchor){
+      timeHint.textContent = "第一天第一個地點時間由航班抵達時間自動決定，可在前面加「接機交通」段落調整";
+    } else {
+      timeHint.textContent = spot ? "此地點時間由前面行程自動算出（非第一個地點不能手動改）" : "儲存後會依前面行程自動算出抵達時間";
+    }
+    timeHint.style.display = "block";
+  }
   document.getElementById("fStayMinutes").value = spot ? (spot.stayMinutes||"") : "";
   fCategory.value = spot ? (spot.category||"景點") : "景點";
   fName.value = spot ? spot.name : "";
