@@ -377,7 +377,7 @@
     <button class="close-x" id="spotClose">✕</button>
     <h2 id="spotModalTitle">新增地點</h2>
     <div class="row2">
-      <div class="field"><label>時間</label><input id="fTime" type="time"></div>
+      <div class="field"><label>抵達時間</label><input id="fTime" type="time"></div>
       <div class="field"><label>類型</label>
         <select id="fCategory">
           <option value="景點">🏛️ 景點</option>
@@ -387,6 +387,7 @@
         </select>
       </div>
     </div>
+    <div class="field"><label>停留時間（分鐘，選填）</label><input id="fStayMinutes" type="number" placeholder="例：90"></div>
     <div class="field"><label>名稱（可搜尋自動帶入）</label><input id="fName" type="text" placeholder="輸入地點名稱..."></div>
     <p id="placesStatus" style="font-size:11.5px; color:var(--seal); margin:-10px 0 12px; display:none;"></p>
     <div class="field"><label>筆記（選填）</label><textarea id="fNote" placeholder="地址、營業時間、心得等"></textarea></div>
@@ -434,7 +435,7 @@
     </div>
     <div class="row2">
       <div class="field">
-        <label>出發時間（跟著上一個地點）</label>
+        <label>出發時間（跟著上一個地點離開時間）</label>
         <div style="padding:12px 14px; border-radius:10px; background:var(--bg); border:1px solid var(--line); color:var(--ink); font-weight:600; font-size:15px;" id="tDepartDisplay">--:--</div>
       </div>
       <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="15"></div>
@@ -959,7 +960,7 @@ function renderDayList(){
     const it = arr[idx];
     if(it.type==="spot"){
       list.appendChild(buildSpotCard(it));
-      lastSpotTime = it.time || "";
+      lastSpotTime = computeSpotLeaveTime(it);
       const next = arr[idx+1];
       if(next && next.type==="spot"){
         list.appendChild(buildAddTransportGhost(it, next));
@@ -970,16 +971,23 @@ function renderDayList(){
   }
 }
 
+function computeSpotLeaveTime(spot){
+  if(spot.time && spot.stayMinutes){ return addMinutesToTime(spot.time, spot.stayMinutes); }
+  return spot.time || "";
+}
+
 function buildSpotCard(it){
   const card = document.createElement("div");
   card.className = "spot-card";
   const exp = it.expense && it.expense.amount ? `<div class="spot-expense">💰 ${it.expense.category||''} ${currencySymbol(it.expense.currency)}${it.expense.amount}</div>` : "";
+  const stayInfo = (it.time && it.stayMinutes) ? `<p class="spot-meta">停留約${it.stayMinutes}分 · ${computeSpotLeaveTime(it)} 離開</p>` : "";
   card.innerHTML = `
     <div class="spot-time">${it.time || ""}</div>
     <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
     <div class="spot-body">
       <p class="spot-name">${escapeHtml(it.name)}</p>
       <p class="spot-meta">${escapeHtml(it.category||"其他")}</p>
+      ${stayInfo}
       ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
       ${exp}
     </div>
@@ -1011,7 +1019,7 @@ function buildAddTransportGhost(prevSpot, nextSpot){
   const mid = (prevSpot.order + nextSpot.order) / 2;
   wrap.querySelector("button").addEventListener("click", ()=>{
     pendingTransport = { day: currentDay, order: mid, id: null };
-    openTransportModal(null, prevSpot.time||"");
+    openTransportModal(null, computeSpotLeaveTime(prevSpot));
   });
   return wrap;
 }
@@ -1146,6 +1154,7 @@ function openSpotModal(spot){
   editingSpotId = spot ? spot.id : null;
   document.getElementById("spotModalTitle").textContent = spot ? "編輯地點" : "新增地點";
   fTime.value = spot ? (spot.time||"") : "";
+  document.getElementById("fStayMinutes").value = spot ? (spot.stayMinutes||"") : "";
   fCategory.value = spot ? (spot.category||"景點") : "景點";
   fName.value = spot ? spot.name : "";
   fNote.value = spot ? (spot.note||"") : "";
@@ -1180,6 +1189,7 @@ document.getElementById("spotSave").addEventListener("click", async ()=>{
   if(!name){ fName.focus(); return; }
   const data = {
     type:"spot", tripId: activeTripId, day: currentDay, time: fTime.value||"", category: fCategory.value,
+    stayMinutes: document.getElementById("fStayMinutes").value ? Number(document.getElementById("fStayMinutes").value) : 0,
     name, note: fNote.value.trim(),
     expense: { amount: fExpAmount.value ? Number(fExpAmount.value) : 0, category: fExpCategory.value, payer: fExpPayer.value||"", currency: getCurrencyChip(fCurrencyChips) }
   };
