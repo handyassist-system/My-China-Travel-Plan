@@ -122,10 +122,11 @@
   .empty .emoji{font-size:36px; display:block; margin-bottom:10px;}
 
   .spot-card{
-    background:var(--card); border-radius:var(--radius-lg); padding:12px 14px 12px 12px;
+    background:var(--card); border-radius:var(--radius-lg); padding:12px 14px 8px 12px;
     border:1px solid var(--line); border-left:3px dashed var(--seal-soft);
-    display:flex; gap:10px; align-items:flex-start; margin-bottom:4px;
+    display:flex; flex-direction:column; margin-bottom:4px;
   }
+  .spot-main{display:flex; gap:10px; align-items:flex-start;}
   .spot-time{font-size:12px; color:var(--sub); width:38px; flex-shrink:0; padding-top:2px; font-variant-numeric:tabular-nums;}
   .spot-icon{
     width:38px; height:38px; border-radius:11px; background:var(--accent-soft);
@@ -136,8 +137,8 @@
   .spot-meta{font-size:11px; color:var(--sub); margin:0 0 4px;}
   .spot-note{font-size:12.5px; color:#4A4A4E; white-space:pre-wrap; word-break:break-word; margin:0 0 4px;}
   .spot-expense{font-size:12.5px; color:var(--green); font-weight:600;}
-  .spot-actions{display:flex; flex-direction:column; gap:4px;}
-  .spot-actions button{width:25px; height:25px; border-radius:7px; border:none; background:var(--bg); color:var(--sub); font-size:12px;}
+  .spot-actions{display:flex; flex-direction:row; gap:6px; justify-content:flex-end; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);}
+  .spot-actions button{width:27px; height:27px; border-radius:7px; border:none; background:var(--bg); color:var(--sub); font-size:12px;}
   .spot-actions button.del{color:var(--accent);}
 
   /* transport connector */
@@ -942,13 +943,17 @@ function renderMap(){
   canvas.innerHTML = "";
   mapInstance = new google.maps.Map(canvas, { zoom: 12, center:{lat:spots[0].lat,lng:spots[0].lng}, disableDefaultUI:true, zoomControl:true });
   const bounds = new google.maps.LatLngBounds();
-  spots.forEach(s=>{
-    const pos = { lat: s.lat, lng: s.lng };
-    new google.maps.Marker({
-      position: pos, map: mapInstance, title: s.name,
-      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: colorForDay(s.day), fillOpacity: 1, strokeColor:"#fff", strokeWeight:2 }
+  days.forEach(d=>{
+    const daySpots = dayItems(d).filter(i=>i.type==="spot" && i.lat!=null && i.lng!=null);
+    daySpots.forEach((s, idx)=>{
+      const pos = { lat: s.lat, lng: s.lng };
+      new google.maps.Marker({
+        position: pos, map: mapInstance, title: `${d} #${idx+1} ${s.name}`,
+        label: { text: String(idx+1), color:"#fff", fontSize:"12px", fontWeight:"700" },
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: colorForDay(d), fillOpacity: 1, strokeColor:"#fff", strokeWeight:2 }
+      });
+      bounds.extend(pos);
     });
-    bounds.extend(pos);
   });
   mapInstance.fitBounds(bounds);
 }
@@ -1134,18 +1139,19 @@ function buildSpotCard(it, d){
   if(it.departTime) metaParts.push(`🚪${it.departTime}出發`);
   if(d.arrival && it.stayMinutes) metaParts.push(`停留${it.stayMinutes}分・${d.leave}離開`);
   card.innerHTML = `
-    <div class="spot-time">${d.arrival || ""}</div>
-    <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
-    <div class="spot-body">
-      <p class="spot-name">${escapeHtml(it.name)}</p>
-      <p class="spot-meta">${metaParts.join(" · ")}</p>
-      ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
-      ${exp}
+    <div class="spot-main">
+      <div class="spot-time">${d.arrival || ""}</div>
+      <div class="spot-icon">${CATEGORY_ICON[it.category]||"📌"}</div>
+      <div class="spot-body">
+        <p class="spot-name">${escapeHtml(it.name)}</p>
+        <p class="spot-meta">${metaParts.join(" · ")}</p>
+        ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
+        ${exp}
+      </div>
     </div>
     <div class="spot-actions">
       <button class="up" title="上移">▲</button>
       <button class="down" title="下移">▼</button>
-
       <button class="copy" title="複製">⧉</button>
       <button class="edit">✎</button>
       <button class="del">🗑</button>
@@ -1199,6 +1205,8 @@ const fExpAmount = document.getElementById("fExpAmount");
 const fExpCategory = document.getElementById("fExpCategory");
 const fExpPayer = document.getElementById("fExpPayer");
 const fPayerWrap = document.getElementById("fPayerWrap");
+fName.addEventListener("input", ()=>{ fSelectedLatLng = null; });
+document.getElementById("hName").addEventListener("input", ()=>{ hSelectedLatLng = null; });
 
 function populatePayerSelect(selectEl, wrapEl, currentValue){
   const trip = getActiveTrip();
@@ -2070,10 +2078,12 @@ function renderPacking(){
       card.className = "spot-card";
       card.style.marginBottom = "8px";
       card.innerHTML = `
-        <div class="spot-icon" style="cursor:pointer;">${it.checked ? "✅" : "⬜"}</div>
-        <div class="spot-body">
-          <p class="spot-name" style="${it.checked?'text-decoration:line-through; color:var(--sub);':''}">${escapeHtml(it.name)}</p>
-          ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
+        <div class="spot-main">
+          <div class="spot-icon" style="cursor:pointer;">${it.checked ? "✅" : "⬜"}</div>
+          <div class="spot-body">
+            <p class="spot-name" style="${it.checked?'text-decoration:line-through; color:var(--sub);':''}">${escapeHtml(it.name)}</p>
+            ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
+          </div>
         </div>
         <div class="spot-actions">
           <button class="edit">✎</button>
