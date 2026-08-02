@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
   window.__gmapsStatus = "loading";
   window.gm_authFailure = function(){ window.__gmapsStatus = "auth_failed"; };
@@ -96,7 +97,7 @@
   .day-date-row{display:flex; align-items:center; justify-content:space-between; padding:0 20px; margin-top:-2px;}
   .day-date-row .day-date-label{padding:0;}
   #editTripShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 0;}
-  #copyDayShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
+  #swapDayShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
 
   /* ---------- Day Tabs ---------- */
   #dayTabs{display:flex; gap:10px; overflow-x:auto; padding:14px 20px 8px; scrollbar-width:none;}
@@ -289,7 +290,7 @@
       <div class="day-date-row">
         <div id="dayDateLabel" class="day-date-label"></div>
         <div>
-          <button id="copyDayShortcut" style="display:none;">⧉ 複製整天</button>
+          <button id="swapDayShortcut" style="display:none;">⇄ 交換天數</button>
           <button id="editTripShortcut" style="display:none;">✎ 編輯行程</button>
         </div>
       </div>
@@ -398,27 +399,27 @@
     <div class="field"><label>名稱（可搜尋自動帶入）</label><input id="fName" type="text" placeholder="輸入地點名稱..."></div>
     <p id="placesStatus" style="font-size:11.5px; color:var(--seal); margin:-10px 0 12px; display:none;"></p>
     <div class="field"><label>筆記（選填）</label><textarea id="fNote" placeholder="地址、營業時間、心得等"></textarea></div>
-    <div class="row2">
-      <div class="field"><label>花費金額（選填）</label><input id="fExpAmount" type="number" placeholder="0"></div>
-      <div class="field"><label>花費類別</label>
-        <select id="fExpCategory">
-          <option value="餐飲">🍜 餐飲</option>
-          <option value="購物">🛍️ 購物</option>
-          <option value="門票">🎫 門票</option>
-          <option value="住宿">🏨 住宿</option>
-          <option value="其他">📌 其他</option>
-        </select>
+    <button type="button" id="fExpToggle" style="width:100%; padding:11px; border:1px dashed var(--seal); background:var(--seal-soft); color:var(--seal); border-radius:var(--radius-md); font-size:13.5px; font-weight:600; margin-bottom:14px;">＋ 新增花費</button>
+    <div id="fExpFields" style="display:none;">
+      <div class="row2">
+        <div class="field"><label>花費金額（選填）</label><input id="fExpAmount" type="number" placeholder="0"></div>
+        <div class="field"><label>花費類別</label>
+          <select id="fExpCategory">
+            <option value="餐飲">🍜 餐飲</option>
+            <option value="購物">🛍️ 購物</option>
+            <option value="門票">🎫 門票</option>
+            <option value="住宿">🏨 住宿</option>
+            <option value="其他">📌 其他</option>
+          </select>
+        </div>
       </div>
-    </div>
-    <div class="field"><label>幣別</label>
-      <div class="chip-row" id="fCurrencyChips">
-        <div class="chip" data-v="CNY">¥ 人民幣</div>
-        <div class="chip" data-v="TWD">NT$ 新台幣</div>
+      <div class="field"><label>幣別</label>
+        <div class="chip-row" id="fCurrencyChips">
+          <div class="chip" data-v="CNY">¥ 人民幣</div>
+          <div class="chip" data-v="TWD">NT$ 新台幣</div>
+        </div>
       </div>
-    </div>
-    <div class="field" id="fPayerWrap" style="display:none;"><label>付款人</label><select id="fExpPayer"></select></div>
-    <div class="field"><label>插入位置</label>
-      <select id="fPosition"></select>
+      <div class="field" id="fPayerWrap" style="display:none;"><label>付款人</label><select id="fExpPayer"></select></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="spotCancel">取消</button>
@@ -578,12 +579,7 @@
     <button class="close-x" id="packClose">✕</button>
     <h2 id="packModalTitle">新增項目</h2>
     <div class="field"><label>類別</label>
-      <div class="chip-row" id="packCatChips">
-        <div class="chip" data-v="藥妝">💊 藥妝</div>
-        <div class="chip" data-v="伴手禮">🎁 伴手禮</div>
-        <div class="chip" data-v="行李">🧳 行李</div>
-        <div class="chip" data-v="其他">📌 其他</div>
-      </div>
+      <div class="chip-row" id="packCatChips"></div>
     </div>
     <div class="field"><label>項目名稱</label><input id="packName" type="text" placeholder="例：感冒藥"></div>
     <div class="field"><label>備註（選填）</label><textarea id="packNote" placeholder="數量、品牌、給誰的..."></textarea></div>
@@ -671,13 +667,26 @@ function tryLogin(){
 loginBtn.addEventListener("click", tryLogin);
 pwInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") tryLogin(); });
 
-function enterApp(){
+async function ensureFirebaseAuth(){
+  if(firebase.auth().currentUser) return firebase.auth().currentUser;
+  try{
+    const cred = await firebase.auth().signInAnonymously();
+    return cred.user;
+  }catch(e){
+    console.error("anonymous auth failed", e);
+    alert("身份驗證失敗，資料可能無法讀寫。請確認 Firebase Authentication 是否已啟用「匿名」登入方式。");
+    return null;
+  }
+}
+
+async function enterApp(){
   loginScreen.style.display = "none";
   mainScreen.style.display = "block";
   fab.style.alignItems = "center";
   fab.style.justifyContent = "center";
   fab.style.display = "none";
   bottomNav.style.display = "none";
+  await ensureFirebaseAuth();
   startListening();
   startTripsListening();
   initAutocomplete();
@@ -884,7 +893,7 @@ function renderItinerary(){
     document.getElementById("dayTabs").innerHTML = "";
     document.getElementById("dayDateLabel").textContent = "";
     document.getElementById("editTripShortcut").style.display = "none";
-    document.getElementById("copyDayShortcut").style.display = "none";
+    document.getElementById("swapDayShortcut").style.display = "none";
     const list = document.getElementById("list");
     list.innerHTML = "";
     list.appendChild(noTripCTA());
@@ -894,7 +903,7 @@ function renderItinerary(){
   renderDayList();
   document.getElementById("dayDateLabel").textContent = computeDateForDay(currentDay);
   document.getElementById("editTripShortcut").style.display = "block";
-  document.getElementById("copyDayShortcut").style.display = days.length>1 ? "inline-block" : "none";
+  document.getElementById("swapDayShortcut").style.display = days.length>1 ? "inline-block" : "none";
 }
 function renderDayTabs(){
   const wrap = document.getElementById("dayTabs");
@@ -972,13 +981,10 @@ function buildFlightWarning(derived){
   return null;
 }
 
-let currentDayDerived = {};
-
 function renderDayList(){
   const list = document.getElementById("list");
   list.innerHTML = "";
   const derived = computeDerivedTimes(currentDay);
-  currentDayDerived = derived;
   const s = flightSettings || {};
   const arr = dayItems(currentDay);
 
@@ -1112,7 +1118,6 @@ const fExpAmount = document.getElementById("fExpAmount");
 const fExpCategory = document.getElementById("fExpCategory");
 const fExpPayer = document.getElementById("fExpPayer");
 const fPayerWrap = document.getElementById("fPayerWrap");
-const fPosition = document.getElementById("fPosition");
 
 function populatePayerSelect(selectEl, wrapEl, currentValue){
   const trip = getActiveTrip();
@@ -1208,18 +1213,9 @@ function checkPlacesStatus(elId){
   el.style.display = "block";
 }
 
-function populatePositionSelect(day, preselectId){
-  fPosition.innerHTML = "";
-  const optEnd = document.createElement("option");
-  optEnd.value = "end"; optEnd.textContent = "加到最後";
-  fPosition.appendChild(optEnd);
-  dayItems(day).filter(i=>i.type==="spot").forEach(s=>{
-    if(preselectId && s.id===preselectId) return;
-    const opt = document.createElement("option");
-    opt.value = "after:"+s.id;
-    opt.textContent = "在「"+s.name+"」之後";
-    fPosition.appendChild(opt);
-  });
+function computeOrder(day){
+  const arr = dayItems(day);
+  return arr.length ? (arr[arr.length-1].order + 1000) : 1000;
 }
 
 function openSpotModal(spot){
@@ -1256,27 +1252,20 @@ function openSpotModal(spot){
   fExpCategory.value = spot && spot.expense ? (spot.expense.category||"餐飲") : "餐飲";
   setCurrencyChip(fCurrencyChips, spot && spot.expense ? spot.expense.currency : "CNY");
   populatePayerSelect(fExpPayer, fPayerWrap, spot && spot.expense ? spot.expense.payer : "");
-  populatePositionSelect(currentDay, spot ? spot.id : null);
+  const hasExpense = !!(spot && spot.expense && spot.expense.amount);
+  document.getElementById("fExpFields").style.display = hasExpense ? "block" : "none";
+  document.getElementById("fExpToggle").style.display = hasExpense ? "none" : "block";
   spotModalMask.classList.add("show");
   checkPlacesStatus();
 }
 function closeSpotModal(){ spotModalMask.classList.remove("show"); editingSpotId = null; }
+document.getElementById("fExpToggle").addEventListener("click", ()=>{
+  document.getElementById("fExpFields").style.display = "block";
+  document.getElementById("fExpToggle").style.display = "none";
+});
 document.getElementById("spotClose").addEventListener("click", closeSpotModal);
 document.getElementById("spotCancel").addEventListener("click", closeSpotModal);
 spotModalMask.addEventListener("click",(e)=>{ if(e.target===spotModalMask) closeSpotModal(); });
-
-function computeOrder(day, position){
-  const arr = dayItems(day);
-  if(position==="end"){
-    return arr.length ? (arr[arr.length-1].order + 1000) : 1000;
-  }
-  const afterId = position.split(":")[1];
-  const idx = arr.findIndex(i=>i.id===afterId);
-  if(idx===-1) return arr.length ? (arr[arr.length-1].order+1000) : 1000;
-  const cur = arr[idx].order;
-  const next = arr[idx+1] ? arr[idx+1].order : cur+2000;
-  return (cur+next)/2;
-}
 
 document.getElementById("spotSave").addEventListener("click", async ()=>{
   const name = fName.value.trim();
@@ -1292,7 +1281,7 @@ document.getElementById("spotSave").addEventListener("click", async ()=>{
     if(editingSpotId){
       await db.collection(COLLECTION).doc(editingSpotId).update(data);
     } else {
-      data.order = computeOrder(currentDay, fPosition.value);
+      data.order = computeOrder(currentDay);
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection(COLLECTION).add(data);
     }
@@ -1406,6 +1395,14 @@ async function deleteSpotWithAdjacentTransport(spot){
     const batch = db.batch();
     toDelete.forEach(id=>batch.delete(db.collection(COLLECTION).doc(id)));
     await batch.commit();
+    if(idx===0){
+      const remaining = arr.filter(i=>!toDelete.includes(i.id));
+      const newFirst = remaining[0];
+      const hasFlightAnchor = (spot.day===days[0]) && !!(flightSettings && flightSettings.outArriveTime);
+      if(newFirst && newFirst.type==="spot" && !hasFlightAnchor){
+        setTimeout(()=>{ alert(`提醒：「${newFirst.name}」現在變成 ${spot.day} 的第一個地點，記得幫它補上時間，後面的行程才能正確計算。`); }, 300);
+      }
+    }
   }catch(e){ console.error("delete spot+transport failed", e); alert("刪除失敗，請檢查網路連線"); }
 }
 
@@ -1426,9 +1423,9 @@ async function moveSpot(spot, direction){
   }catch(e){ console.error("move spot failed", e); alert("移動失敗，請檢查網路連線"); }
 }
 
-// ================= COPY (spot / whole day) =================
+// ================= COPY (spot) / SWAP (whole day) =================
 const copyDayModalMask = document.getElementById("copyDayModalMask");
-let copyContext = null; // { mode: 'spot'|'day', spot? }
+let copyContext = null; // { mode: 'spot'|'swap', spot? }
 
 function populateCopyDaySelect(excludeCurrent){
   const sel = document.getElementById("copyDaySelect");
@@ -1443,12 +1440,14 @@ function populateCopyDaySelect(excludeCurrent){
 function openCopySpotPicker(spot){
   copyContext = { mode:"spot", spot };
   document.getElementById("copyDayTitle").textContent = `複製「${spot.name}」到哪一天？`;
+  document.getElementById("copyDayConfirm").textContent = "複製";
   populateCopyDaySelect(false);
   copyDayModalMask.classList.add("show");
 }
-document.getElementById("copyDayShortcut").addEventListener("click", ()=>{
-  copyContext = { mode:"day" };
-  document.getElementById("copyDayTitle").textContent = `把「${currentDay}」整天複製到哪一天？`;
+document.getElementById("swapDayShortcut").addEventListener("click", ()=>{
+  copyContext = { mode:"swap" };
+  document.getElementById("copyDayTitle").textContent = `「${currentDay}」要跟哪一天互換？`;
+  document.getElementById("copyDayConfirm").textContent = "交換";
   populateCopyDaySelect(true);
   copyDayModalMask.classList.add("show");
 });
@@ -1463,10 +1462,10 @@ document.getElementById("copyDayConfirm").addEventListener("click", async ()=>{
     if(copyContext.mode==="spot"){
       await copyItemsToDay([copyContext.spot], targetDay);
     } else {
-      await copyItemsToDay(dayItems(currentDay), targetDay);
+      await swapDayContents(currentDay, targetDay);
     }
     copyDayModalMask.classList.remove("show");
-  }catch(e){ console.error("copy failed", e); alert("複製失敗，請檢查網路連線"); }
+  }catch(e){ console.error("copy/swap failed", e); alert("操作失敗，請檢查網路連線"); }
 });
 
 async function copyItemsToDay(sourceItems, targetDay){
@@ -1484,6 +1483,16 @@ async function copyItemsToDay(sourceItems, targetDay){
     batch.set(ref, data);
   });
   await batch.commit();
+}
+
+async function swapDayContents(dayA, dayB){
+  const arrA = dayItems(dayA);
+  const arrB = dayItems(dayB);
+  const batch = db.batch();
+  arrA.forEach(it=>batch.update(db.collection(COLLECTION).doc(it.id), { day: dayB }));
+  arrB.forEach(it=>batch.update(db.collection(COLLECTION).doc(it.id), { day: dayA }));
+  await batch.commit();
+  currentDay = dayB;
 }
 
 
@@ -1577,8 +1586,7 @@ document.getElementById("assignCancel").addEventListener("click", ()=>assignModa
 assignModalMask.addEventListener("click",(e)=>{ if(e.target===assignModalMask) assignModalMask.classList.remove("show"); });
 document.getElementById("assignSave").addEventListener("click", async ()=>{
   const day = document.getElementById("assignDaySelect").value;
-  const arr = dayItems(day);
-  const order = arr.length ? arr[arr.length-1].order + 1000 : 1000;
+  const order = computeOrder(day);
   const holdItem = items.find(i=>i.id===assigningHoldId);
   const category = (holdItem && holdItem.category) || "其他";
   try{
@@ -1808,22 +1816,48 @@ const packModalMask = document.getElementById("packModalMask");
 const packCatChips = document.getElementById("packCatChips");
 const packName = document.getElementById("packName");
 const packNote = document.getElementById("packNote");
+const PACKING_BASE_CATS = ["藥妝","伴手禮","行李","其他"];
+const PACKING_ICONS = { "藥妝":"💊", "伴手禮":"🎁", "行李":"🧳", "其他":"📌" };
 let selectedPackCat = "藥妝";
 let editingPackId = null;
 
-packCatChips.querySelectorAll(".chip").forEach(chip=>{
-  chip.addEventListener("click", ()=>{
-    selectedPackCat = chip.dataset.v;
-    packCatChips.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
-    chip.classList.add("active");
+function getAllPackingCategories(){
+  const custom = [...new Set(
+    items.filter(i=>i.tripId===activeTripId && i.type==="packing" && i.category && !PACKING_BASE_CATS.includes(i.category))
+         .map(i=>i.category)
+  )];
+  return [...PACKING_BASE_CATS, ...custom];
+}
+
+function renderPackCatChips(){
+  packCatChips.innerHTML = "";
+  getAllPackingCategories().forEach(cat=>{
+    const chip = document.createElement("div");
+    chip.className = "chip" + (cat===selectedPackCat ? " active" : "");
+    chip.dataset.v = cat;
+    chip.textContent = (PACKING_ICONS[cat] || "🏷️") + " " + cat;
+    chip.addEventListener("click", ()=>{ selectedPackCat = cat; renderPackCatChips(); });
+    packCatChips.appendChild(chip);
   });
-});
+  const addChip = document.createElement("div");
+  addChip.className = "chip";
+  addChip.style.borderStyle = "dashed";
+  addChip.textContent = "＋ 自訂";
+  addChip.addEventListener("click", ()=>{
+    const name = prompt("輸入新的類別名稱：");
+    if(name && name.trim()){
+      selectedPackCat = name.trim();
+      renderPackCatChips();
+    }
+  });
+  packCatChips.appendChild(addChip);
+}
 
 function openPackModal(item){
   editingPackId = item ? item.id : null;
   document.getElementById("packModalTitle").textContent = item ? "編輯項目" : "新增項目";
   selectedPackCat = item ? (item.category||"藥妝") : "藥妝";
-  packCatChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedPackCat));
+  renderPackCatChips();
   packName.value = item ? item.name : "";
   packNote.value = item ? (item.note||"") : "";
   packModalMask.classList.add("show");
@@ -1866,7 +1900,7 @@ function renderPacking(){
     wrap.appendChild(empty);
     return;
   }
-  const cats = ["藥妝","伴手禮","行李","其他"];
+  const cats = getAllPackingCategories();
   cats.forEach(cat=>{
     const list = arr.filter(i=>(i.category||"其他")===cat);
     if(list.length===0) return;
