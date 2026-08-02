@@ -775,7 +775,7 @@ function renderDayTabs(){
     const el = document.createElement("div");
     el.className = "tab" + (d===currentDay ? " active":"");
     el.textContent = d;
-    el.addEventListener("click", ()=>{ currentDay=d; renderDayList(); });
+    el.addEventListener("click", ()=>{ currentDay=d; renderItinerary(); });
     wrap.appendChild(el);
   });
   const addEl = document.createElement("div");
