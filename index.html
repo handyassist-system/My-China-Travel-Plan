@@ -1847,8 +1847,16 @@ function updateStationHintJapan(el){
     travelMode: "TRANSIT",
   }, (result, status)=>{
     if(requestId !== japanHintRequestId) return; // a newer request superseded this one
+    console.log("Directions API status:", status);
     if(status!=="OK" || !result.routes || !result.routes[0]){
-      el.innerHTML = "🚃 查不到電車路線（可能距離太近/太遠，或該路段資料不齊），請手動輸入";
+      const statusMsgs = {
+        REQUEST_DENIED: "🔴 API金鑰被拒絕存取，請確認Google Cloud的金鑰「應用程式限制」有把Directions API加進允許清單",
+        OVER_QUERY_LIMIT: "🔴 查詢額度超過，請稍後再試或檢查帳單設定",
+        ZERO_RESULTS: "🚃 這兩點之間查不到大眾運輸路線，請手動輸入",
+        NOT_FOUND: "🚃 其中一個地點座標無法定位，請確認地點資料",
+        INVALID_REQUEST: "🔴 查詢格式有誤（程式問題，請回報）",
+      };
+      el.innerHTML = (statusMsgs[status] || `🔴 查詢失敗（狀態：${status}），請手動輸入`) + `<br><span style="font-size:10.5px; opacity:0.75;">狀態碼：${status}</span>`;
       el.style.display = "block";
       return;
     }
