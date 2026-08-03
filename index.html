@@ -2123,13 +2123,22 @@ let _lastLongPressCard = null;
 
 function setupLongPressReveal(card){
   let timer = null;
+  let firedByLongPress = false;
+  const actionsEl = card.querySelector(".spot-actions");
   const reveal = ()=>{
-    if(_lastLongPressCard && _lastLongPressCard!==card){ _lastLongPressCard.classList.remove("pack-actions-show"); }
-    card.classList.add("pack-actions-show");
+    if(_lastLongPressCard && _lastLongPressCard!==card){
+      const prevActions = _lastLongPressCard.querySelector(".spot-actions");
+      if(prevActions) prevActions.classList.remove("pack-actions-show");
+    }
+    if(actionsEl) actionsEl.classList.add("pack-actions-show");
     _lastLongPressCard = card;
+    firedByLongPress = true;
   };
-  card.addEventListener("touchstart", ()=>{ timer = setTimeout(reveal, 500); }, { passive:true });
-  card.addEventListener("touchend", ()=>{ clearTimeout(timer); });
+  card.addEventListener("touchstart", ()=>{ firedByLongPress=false; timer = setTimeout(reveal, 500); }, { passive:true });
+  card.addEventListener("touchend", (e)=>{
+    clearTimeout(timer);
+    if(firedByLongPress){ e.preventDefault(); firedByLongPress = false; }
+  });
   card.addEventListener("touchmove", ()=>{ clearTimeout(timer); });
   card.addEventListener("contextmenu", (e)=>{ e.preventDefault(); reveal(); });
   card.addEventListener("mousedown", ()=>{ timer = setTimeout(reveal, 500); });
@@ -2138,7 +2147,8 @@ function setupLongPressReveal(card){
 }
 document.addEventListener("click", (e)=>{
   if(_lastLongPressCard && !_lastLongPressCard.contains(e.target)){
-    _lastLongPressCard.classList.remove("pack-actions-show");
+    const actionsEl = _lastLongPressCard.querySelector(".spot-actions");
+    if(actionsEl) actionsEl.classList.remove("pack-actions-show");
     _lastLongPressCard = null;
   }
 });
