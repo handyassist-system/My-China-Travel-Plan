@@ -98,6 +98,7 @@
   .day-date-row .day-date-label{padding:0;}
   #editTripShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 0;}
   #swapDayShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
+  #shareTripBtn{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
 
   /* ---------- Day Tabs ---------- */
   #dayTabs{display:flex; gap:10px; overflow-x:auto; padding:14px 20px 8px; scrollbar-width:none;}
@@ -295,6 +296,7 @@
       <div class="day-date-row">
         <div id="dayDateLabel" class="day-date-label"></div>
         <div>
+          <button id="shareTripBtn" style="display:none;">📤 分享</button>
           <button id="swapDayShortcut" style="display:none;">⇄ 交換天數</button>
           <button id="editTripShortcut" style="display:none;">✎ 編輯行程</button>
         </div>
@@ -990,6 +992,7 @@ function renderItinerary(){
     document.getElementById("dayDateLabel").textContent = "";
     document.getElementById("editTripShortcut").style.display = "none";
     document.getElementById("swapDayShortcut").style.display = "none";
+    document.getElementById("shareTripBtn").style.display = "none";
     const list = document.getElementById("list");
     list.innerHTML = "";
     list.appendChild(noTripCTA());
@@ -1000,6 +1003,7 @@ function renderItinerary(){
   document.getElementById("dayDateLabel").textContent = computeDateForDay(currentDay);
   document.getElementById("editTripShortcut").style.display = "block";
   document.getElementById("swapDayShortcut").style.display = days.length>1 ? "inline-block" : "none";
+  document.getElementById("shareTripBtn").style.display = "inline-block";
 }
 function renderDayTabs(){
   const wrap = document.getElementById("dayTabs");
@@ -2601,6 +2605,49 @@ document.getElementById("tripAddBtn").addEventListener("click", ()=>{ openTripMo
 document.getElementById("editTripShortcut").addEventListener("click", ()=>{
   const trip = getActiveTrip();
   if(trip) openTripModal(trip);
+});
+
+function buildShareText(){
+  const trip = getActiveTrip();
+  const lines = [];
+  lines.push(`【${trip ? trip.name : "行程"}】`);
+  days.forEach(day=>{
+    const dateLabel = computeDateForDay(day);
+    lines.push("");
+    lines.push(`▶ ${day}${dateLabel ? "　"+dateLabel : ""}`);
+    const derived = computeDerivedTimes(day);
+    const arr = dayItems(day);
+    if(arr.length===0){ lines.push("（尚未安排）"); return; }
+    arr.forEach(it=>{
+      if(it.type==="spot"){
+        const d = derived[it.id] || {};
+        const timeStr = d.arrival || "未定";
+        let line = `• ${timeStr} ${it.name}`;
+        if(it.note){ line += `（${it.note}）`; }
+        lines.push(line);
+      } else if(it.type==="transport"){
+        lines.push(`　${TRANSPORT_ICON[it.mode]||"🚇"}${TRANSPORT_LABEL[it.mode]||""}`);
+      }
+    });
+  });
+  return lines.join("\n");
+}
+
+document.getElementById("shareTripBtn").addEventListener("click", async ()=>{
+  const text = buildShareText();
+  const trip = getActiveTrip();
+  if(navigator.share){
+    try{ await navigator.share({ title: trip ? trip.name : "行程", text }); }
+    catch(e){ /* user cancelled share, ignore */ }
+  } else {
+    try{
+      await navigator.clipboard.writeText(text);
+      alert("已複製到剪貼簿，可以貼到想分享的地方");
+    }catch(e){
+      console.error("clipboard write failed", e);
+      alert("無法自動複製，請手動選取以下內容：\n\n"+text);
+    }
+  }
 });
 
 function openTripModal(trip){
