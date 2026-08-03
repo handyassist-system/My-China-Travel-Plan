@@ -2641,13 +2641,18 @@ function buildShareText(){
     // from the transport that immediately precedes it.
     const rows = [];
     let pendingTransportLabel = null;
+    let spotIndex = 0;
     arr.forEach(it=>{
       if(it.type==="transport"){
         pendingTransportLabel = `${TRANSPORT_LABEL[it.mode]||""}${it.duration ? " 約"+it.duration+"分" : ""}`;
       } else if(it.type==="spot"){
         const d = derived[it.id] || {};
-        rows.push({ time: d.arrival || "", name: it.name, transport: pendingTransportLabel });
+        const isFirstSpot = spotIndex===0;
+        const displayTime = isFirstSpot ? (it.departTime || d.arrival || "") : (d.arrival || "");
+        const stayInfo = (d.arrival && it.stayMinutes) ? `停留${it.stayMinutes}分，${d.leave}離開` : "";
+        rows.push({ time: displayTime, name: it.name, transport: pendingTransportLabel, stayInfo });
         pendingTransportLabel = null;
+        spotIndex++;
       }
     });
 
@@ -2659,8 +2664,10 @@ function buildShareText(){
         lastGroup = group;
       }
       const timeStr = row.time || "未定";
-      const transportSuffix = row.transport ? `（${row.transport}）` : "";
-      lines.push(`${timeStr} ${row.name}${transportSuffix}`);
+      const extras = [row.transport, row.stayInfo].filter(Boolean).join("，");
+      const suffix = extras ? `（${extras}）` : "";
+      lines.push(`${timeStr} ${row.name}${suffix}`);
+      lines.push("");
     });
   });
 
