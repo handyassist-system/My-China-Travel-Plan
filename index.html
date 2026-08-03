@@ -396,6 +396,8 @@
     <button class="close-x" id="spotClose">✕</button>
     <h2 id="spotModalTitle">新增地點</h2>
     <div class="field"><label>抵達時間</label><input id="fTime" type="time"></div>
+    <p id="fTimeHint" style="font-size:11.5px; color:var(--sub); margin:-10px 0 12px; display:none;"></p>
+    <div class="field" id="fDepartWrap" style="display:none;"><label id="fDepartLabel">出發時間（選填，例如出門/離開飯店時間）</label><input id="fDepartTime" type="time"></div>
     <div class="field"><label>類型</label>
       <div class="chip-row" id="fCategoryChips"></div>
       <div class="row2" id="fCustomCatForm" style="display:none; margin-top:8px;">
@@ -403,8 +405,6 @@
         <button id="fCustomCatConfirm" class="btn btn-ghost" style="flex:0 0 auto; padding:0 16px;">加入</button>
       </div>
     </div>
-    <p id="fTimeHint" style="font-size:11.5px; color:var(--sub); margin:-10px 0 12px; display:none;"></p>
-    <div class="field" id="fDepartWrap" style="display:none;"><label>出發時間（選填，例如出門/離開飯店時間）</label><input id="fDepartTime" type="time"></div>
     <div class="field"><label>停留時間（分鐘，選填）</label><input id="fStayMinutes" type="number" placeholder="例：90"></div>
     <div class="field"><label>名稱（可搜尋自動帶入）</label><input id="fName" type="text" placeholder="輸入地點名稱..."></div>
     <p id="fCatSuggestHint" style="font-size:11px; color:var(--sub); margin:-10px 0 12px; display:none;"></p>
@@ -1426,6 +1426,9 @@ function openSpotModal(spot){
   }
   const departWrap = document.getElementById("fDepartWrap");
   departWrap.style.display = isFirstPosition ? "block" : "none";
+  document.getElementById("fDepartLabel").textContent = (isFirstPosition && hasFlightAnchor)
+    ? "出發時間（選填，例如出關/提領行李後的時間，跟航班抵達時間不同）"
+    : "出發時間（選填，例如出門/離開飯店時間）";
   document.getElementById("fDepartTime").value = spot ? (spot.departTime||"") : "";
   document.getElementById("fStayMinutes").value = spot ? (spot.stayMinutes||"") : "";
   selectedSpotCat = spot ? (spot.category||"景點") : "景點";
