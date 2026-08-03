@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>大陸旅遊計畫</title>
+<title>旅遊計畫</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -266,6 +266,11 @@
     background:#FBE9C6; color:#7A4A12; border:1px solid #E8C57D; border-radius:var(--radius-md);
     padding:12px 14px; font-size:12.5px; line-height:1.5; margin-bottom:10px;
   }
+  .deadline-reminder{
+    background:var(--seal); color:#fff; border-radius:var(--radius-md);
+    padding:12px 14px; font-size:13px; line-height:1.5; margin-bottom:10px; font-weight:600;
+  }
+  .deadline-reminder b{font-size:15px;}
 </style>
 </head>
 <body>
@@ -274,7 +279,7 @@
   <div id="loginScreen">
     <div class="passport-frame">
       <div class="login-badge">境</div>
-      <h1>大陸旅遊計畫</h1>
+      <h1>旅遊計畫</h1>
       <p class="eyebrow">通行憑證 · 請輸入授權碼</p>
       <input id="pwInput" type="password" inputmode="numeric" maxlength="4" placeholder="••••">
       <div id="loginError"></div>
@@ -306,12 +311,9 @@
 
     <div id="expenseView" style="display:none;">
       <div class="exp-total">
-        <div class="exp-currency-toggle" id="expCurrencyToggle">
-          <button data-v="CNY" class="active">¥ 人民幣</button>
-          <button data-v="TWD">NT$ 新台幣</button>
-        </div>
+        <div class="exp-currency-toggle" id="expCurrencyToggle"></div>
         <div class="amt" id="expTotal">¥0</div>
-        <div class="exp-rate">匯率 1¥ = <input id="rateInput" type="number" step="0.1"> NT$ <button id="rateFetchBtn" type="button" style="border:none; background:var(--seal-soft); color:var(--seal); border-radius:8px; padding:4px 8px; font-size:11px;">🔄更新即時匯率</button></div>
+        <div class="exp-rate">匯率 1<span id="rateFromLabel">¥</span> = <input id="rateInput" type="number" step="0.01"> NT$ <button id="rateFetchBtn" type="button" style="border:none; background:var(--seal-soft); color:var(--seal); border-radius:8px; padding:4px 8px; font-size:11px;">🔄更新即時匯率</button></div>
       </div>
       <div class="exp-cats" id="expCats"></div>
       <div class="exp-cats" id="expByMember" style="margin-top:0;"></div>
@@ -358,10 +360,7 @@
       </div>
       <div class="field"><label>花費（機票錢，選填）</label><input id="fsExpense" type="number" placeholder="0"></div>
       <div class="field"><label>幣別</label>
-        <div class="chip-row" id="fsCurrencyChips">
-          <div class="chip" data-v="CNY">¥ 人民幣</div>
-          <div class="chip" data-v="TWD">NT$ 新台幣</div>
-        </div>
+        <div class="chip-row" id="fsCurrencyChips"></div>
       </div>
       <div class="field" id="fsPayerWrap" style="display:none;"><label>付款人</label><select id="fsExpPayer"></select></div>
       <p style="font-size:12px; color:var(--sub); text-align:center;">修改後自動儲存，並會顯示在第一天／最後一天行程最上方</p>
@@ -427,10 +426,7 @@
         </div>
       </div>
       <div class="field"><label>幣別</label>
-        <div class="chip-row" id="fCurrencyChips">
-          <div class="chip" data-v="CNY">¥ 人民幣</div>
-          <div class="chip" data-v="TWD">NT$ 新台幣</div>
-        </div>
+        <div class="chip-row" id="fCurrencyChips"></div>
       </div>
       <div class="field" id="fPayerWrap" style="display:none;"><label>付款人</label><select id="fExpPayer"></select></div>
     </div>
@@ -477,10 +473,7 @@
       <div class="row2">
         <div class="field"><label>花費（選填）</label><input id="tExpAmount" type="number" placeholder="0"></div>
         <div class="field"><label>幣別</label>
-          <div class="chip-row" id="tCurrencyChips">
-            <div class="chip" data-v="CNY">¥ 人民幣</div>
-            <div class="chip" data-v="TWD">NT$ 新台幣</div>
-          </div>
+          <div class="chip-row" id="tCurrencyChips"></div>
         </div>
       </div>
       <div class="field" id="tPayerWrap" style="display:none;"><label>付款人</label><select id="tExpPayer"></select></div>
@@ -561,6 +554,12 @@
     </div>
     <h2 id="tripModalTitle">新增行程</h2>
     <div class="field"><label>行程名稱</label><input id="trName" type="text" placeholder="例：上海五日遊"></div>
+    <div class="field"><label>地區</label>
+      <div class="chip-row" id="trRegionChips">
+        <div class="chip active" data-v="china">🇨🇳 大陸</div>
+        <div class="chip" data-v="japan">🇯🇵 日本</div>
+      </div>
+    </div>
     <div class="row2">
       <div class="field"><label>出發日期</label><input id="trStart" type="date"></div>
       <div class="field"><label>回程日期</label><input id="trEnd" type="date"></div>
@@ -676,13 +675,33 @@ let _fsSaveTimer = null;
 let trMembersTemp = [];
 let editingTripId = null;
 
-const AIRPORTS = {
+const AIRPORTS_CHINA = {
   PVG:"上海浦東", SHA:"上海虹橋", PEK:"北京首都", PKX:"北京大興", CAN:"廣州白雲",
   SZX:"深圳寶安", CTU:"成都天府", TFU:"成都天府", HGH:"杭州蕭山", XIY:"西安咸陽",
   NKG:"南京祿口", CKG:"重慶江北", KMG:"昆明長水", XMN:"廈門高崎",
   TPE:"台北桃園", TSA:"台北松山", KHH:"高雄小港"
 };
-const AIRLINES = ["中華 CI","長榮 BR","星宇 JX","台灣虎航 IT","東方航空 MU","南方航空 CZ","國泰航空 CX","其他"];
+const AIRPORTS_JAPAN = {
+  NRT:"東京成田", HND:"東京羽田", KIX:"大阪關西", ITM:"大阪伊丹",
+  CTS:"札幌新千歲", FUK:"福岡", NGO:"名古屋中部", OKA:"沖繩那霸",
+  KOJ:"鹿兒島", KMJ:"熊本", TPE:"台北桃園", TSA:"台北松山", KHH:"高雄小港"
+};
+function getAirportsForTrip(){
+  const trip = getActiveTrip();
+  return (trip && trip.region==="japan") ? AIRPORTS_JAPAN : AIRPORTS_CHINA;
+}
+// Backward-compatible alias used by existing lookups (e.g. AIRPORTS[code] in
+// flight cards / share text) — always resolves against whichever region the
+// active trip is in, falling back to the China set.
+const AIRPORTS = new Proxy({}, {
+  get(_, code){ return getAirportsForTrip()[code]; }
+});
+const AIRLINES_CHINA = ["中華 CI","長榮 BR","星宇 JX","台灣虎航 IT","東方航空 MU","南方航空 CZ","國泰航空 CX","其他"];
+const AIRLINES_JAPAN = ["中華 CI","長榮 BR","星宇 JX","台灣虎航 IT","日本航空 JL","全日空 ANA","樂桃航空 MM","捷星日本 GK","其他"];
+function getAirlinesForTrip(){
+  const trip = getActiveTrip();
+  return (trip && trip.region==="japan") ? AIRLINES_JAPAN : AIRLINES_CHINA;
+}
 
 // pending context for modals
 let editingSpotId = null;
@@ -1118,6 +1137,11 @@ function renderDayList(){
     }
   }
 
+  if(currentDay === days[days.length-1]){
+    const reminder = buildReturnDeadlineReminder();
+    if(reminder) list.appendChild(reminder);
+  }
+
   const warn = buildFlightWarning(derived);
   if(warn) list.appendChild(warn);
 
@@ -1304,27 +1328,48 @@ function populatePayerSelect(selectEl, wrapEl, currentValue){
   });
 }
 
-function setupCurrencyChips(wrapEl){
-  wrapEl.querySelectorAll(".chip").forEach(chip=>{
+const CURRENCY_SETS = {
+  china: [{code:"CNY", label:"人民幣"}, {code:"TWD", label:"新台幣"}],
+  japan: [{code:"JPY", label:"日圓"}, {code:"TWD", label:"新台幣"}]
+};
+function getCurrenciesForTrip(){
+  const trip = getActiveTrip();
+  return (trip && trip.region==="japan") ? CURRENCY_SETS.japan : CURRENCY_SETS.china;
+}
+function primaryCurrencyForTrip(){
+  return getCurrenciesForTrip()[0].code;
+}
+function renderCurrencyChips(wrapEl, selectedValue, onClickExtra){
+  wrapEl.innerHTML = "";
+  const options = getCurrenciesForTrip();
+  const value = options.some(o=>o.code===selectedValue) ? selectedValue : options[0].code;
+  options.forEach(o=>{
+    const chip = document.createElement("div");
+    chip.className = "chip" + (o.code===value ? " active" : "");
+    chip.dataset.v = o.code;
+    chip.textContent = currencySymbol(o.code) + " " + o.label;
     chip.addEventListener("click", ()=>{
       wrapEl.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
       chip.classList.add("active");
+      if(onClickExtra) onClickExtra();
     });
+    wrapEl.appendChild(chip);
   });
 }
-function setCurrencyChip(wrapEl, value){
-  const v = value || "CNY";
-  wrapEl.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===v));
+function setCurrencyChip(wrapEl, value, onClickExtra){
+  renderCurrencyChips(wrapEl, value || primaryCurrencyForTrip(), onClickExtra);
 }
 function getCurrencyChip(wrapEl){
   const active = wrapEl.querySelector(".chip.active");
-  return active ? active.dataset.v : "CNY";
+  return active ? active.dataset.v : primaryCurrencyForTrip();
 }
+function rateStorageKeyFor(code){ return code==="JPY" ? "jpyToTwdRate" : "cnyToTwdRate"; }
+function defaultRateFor(code){ return code==="JPY" ? 0.22 : 4.5; }
 function convertCurrency(amount, from, to, rate){
-  from = from || "CNY"; to = to || "CNY";
+  from = from || primaryCurrencyForTrip(); to = to || primaryCurrencyForTrip();
   if(from===to) return amount;
-  if(from==="CNY" && to==="TWD") return amount * rate;
-  if(from==="TWD" && to==="CNY") return amount / rate;
+  if(from!=="TWD" && to==="TWD") return amount * rate;
+  if(from==="TWD" && to!=="TWD") return amount / rate;
   return amount;
 }
 function currencySymbol(c){ return c==="TWD" ? "NT$" : "¥"; }
@@ -1332,9 +1377,7 @@ function currencySymbol(c){ return c==="TWD" ? "NT$" : "¥"; }
 const fCurrencyChips = document.getElementById("fCurrencyChips");
 const tCurrencyChips = document.getElementById("tCurrencyChips");
 const fsCurrencyChips = document.getElementById("fsCurrencyChips");
-setupCurrencyChips(fCurrencyChips);
-setupCurrencyChips(tCurrencyChips);
-setupCurrencyChips(fsCurrencyChips);
+
 
 let placesReady = false;
 let holdAutocomplete = null;
@@ -1456,7 +1499,7 @@ function openSpotModal(spot){
   fNote.value = spot ? (spot.note||"") : "";
   fExpAmount.value = spot && spot.expense ? (spot.expense.amount||"") : "";
   fExpCategory.value = spot && spot.expense ? (spot.expense.category||"餐飲") : "餐飲";
-  setCurrencyChip(fCurrencyChips, spot && spot.expense ? spot.expense.currency : "CNY");
+  setCurrencyChip(fCurrencyChips, spot && spot.expense ? spot.expense.currency : primaryCurrencyForTrip());
   populatePayerSelect(fExpPayer, fPayerWrap, spot && spot.expense ? spot.expense.payer : "");
   const hasExpense = !!(spot && spot.expense && spot.expense.amount);
   document.getElementById("fExpFields").style.display = hasExpense ? "block" : "none";
@@ -1682,7 +1725,7 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, is
   transChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedMode));
   tDuration.value = it ? (it.duration||"") : "";
   tExpAmount.value = it && it.expense ? (it.expense.amount||"") : "";
-  setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : "CNY");
+  setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : primaryCurrencyForTrip());
   populatePayerSelect(tExpPayer, tPayerWrap, it && it.expense ? it.expense.payer : "");
   const hasExpense = !!(it && it.expense && it.expense.amount);
   document.getElementById("tExpFields").style.display = hasExpense ? "block" : "none";
@@ -1735,6 +1778,15 @@ function applyDistanceEstimateIfEmpty(){
 function updateStationHint(){
   const el = document.getElementById("tStationHint");
   if(selectedMode!=="subway"){ el.style.display = "none"; return; }
+  const trip = getActiveTrip();
+  if(trip && trip.region==="japan"){
+    updateStationHintJapan(el);
+  } else {
+    updateStationHintChina(el);
+  }
+}
+
+function updateStationHintChina(el){
   const parts = [];
   const p = currentTransportPrevSpot, n = currentTransportNextSpot;
   if(p && p.lat!=null){ const s = findNearestMetroStation(p.lat, p.lng); if(s) parts.push(`出發點附近：${s.name}`); }
@@ -1746,6 +1798,57 @@ function updateStationHint(){
     el.style.display = "none";
   }
 }
+
+let directionsService = null;
+let japanHintRequestId = 0;
+function updateStationHintJapan(el){
+  const p = currentTransportPrevSpot, n = currentTransportNextSpot;
+  if(!p || !n || p.lat==null || n.lat==null){ el.style.display = "none"; return; }
+  if(!window.google || !google.maps || !google.maps.DirectionsService){
+    el.innerHTML = "🚃 路線查詢功能未載入，請手動輸入交通資訊";
+    el.style.display = "block";
+    return;
+  }
+  const requestId = ++japanHintRequestId;
+  el.innerHTML = "🚃 查詢電車路線中...";
+  el.style.display = "block";
+  if(!directionsService) directionsService = new google.maps.DirectionsService();
+  directionsService.route({
+    origin: { lat:p.lat, lng:p.lng },
+    destination: { lat:n.lat, lng:n.lng },
+    travelMode: "TRANSIT",
+  }, (result, status)=>{
+    if(requestId !== japanHintRequestId) return; // a newer request superseded this one
+    if(status!=="OK" || !result.routes || !result.routes[0]){
+      el.innerHTML = "🚃 查不到電車路線（可能距離太近/太遠，或該路段資料不齊），請手動輸入";
+      el.style.display = "block";
+      return;
+    }
+    const leg = result.routes[0].legs[0];
+    const transitSteps = (leg.steps||[]).filter(s=>s.travel_mode==="TRANSIT" && s.transit);
+    if(transitSteps.length===0){
+      el.innerHTML = "🚃 這段距離用走的或轉乘資訊不明確，請手動輸入";
+      el.style.display = "block";
+      return;
+    }
+    const lines = transitSteps.map(s=>{
+      const t = s.transit;
+      const agency = (t.line.agencies && t.line.agencies[0] && t.line.agencies[0].name) || "";
+      const lineName = t.line.short_name || t.line.name || "";
+      const isJR = /JR/i.test(agency) || /JR/i.test(lineName);
+      const isExcludedShinkansen = /のぞみ|Nozomi|みずほ|Mizuho/i.test(lineName);
+      let jrNote;
+      if(isJR && isExcludedShinkansen) jrNote = "⚠️JR但此車種不含在JR Pass";
+      else if(isJR) jrNote = "可能可用JR Pass";
+      else jrNote = "私鐵/地下鐵，不含JR Pass";
+      return `${lineName}（${jrNote}）`;
+    });
+    const totalMin = Math.round(leg.duration.value/60);
+    el.innerHTML = `🚃 ${lines.join(" → ")}<br><span style="opacity:0.85;">預估約${totalMin}分鐘</span><br><span style="color:var(--sub); font-weight:400;">JR Pass判斷僅供參考，新幹線車種例外多，請自行確認</span>`;
+    el.style.display = "block";
+  });
+}
+
 function closeTransportModal(){ transModalMask.classList.remove("show"); }
 document.getElementById("transClose").addEventListener("click", closeTransportModal);
 document.getElementById("transCancel").addEventListener("click", closeTransportModal);
@@ -2025,13 +2128,13 @@ document.getElementById("assignSave").addEventListener("click", async ()=>{
   const holdItem = items.find(i=>i.id===assigningHoldId);
   const category = (holdItem && holdItem.category) || "其他";
   try{
-    await db.collection(COLLECTION).doc(assigningHoldId).update({ type:"spot", day, order, category, time:"", expense:{amount:0,category:"",payer:"",currency:"CNY"} });
+    await db.collection(COLLECTION).doc(assigningHoldId).update({ type:"spot", day, order, category, time:"", expense:{amount:0,category:"",payer:"",currency:primaryCurrencyForTrip()} });
     assignModalMask.classList.remove("show");
   }catch(e){ console.error(e); alert("排入失敗"); }
 });
 
 // ================= EXPENSE =================
-let expDisplayCurrency = localStorage.getItem("expDisplayCurrency") || "CNY";
+let expDisplayCurrency = localStorage.getItem("expDisplayCurrency") || "";
 
 function renderExpense(){
   if(!getActiveTrip()){
@@ -2043,16 +2146,34 @@ function renderExpense(){
     listWrap.appendChild(noTripCTA());
     return;
   }
-  const rate = Number(localStorage.getItem("cnyToTwdRate")) || 4.5;
+  const currencies = getCurrenciesForTrip();
+  if(!currencies.some(c=>c.code===expDisplayCurrency)){ expDisplayCurrency = currencies[0].code; }
+  const primary = primaryCurrencyForTrip();
+  const rateKey = rateStorageKeyFor(primary);
+  const rate = Number(localStorage.getItem(rateKey)) || defaultRateFor(primary);
   document.getElementById("rateInput").value = rate;
-  document.querySelectorAll("#expCurrencyToggle button").forEach(b=>b.classList.toggle("active", b.dataset.v===expDisplayCurrency));
+  document.getElementById("rateFromLabel").textContent = currencySymbol(primary);
+  const toggle = document.getElementById("expCurrencyToggle");
+  toggle.innerHTML = "";
+  currencies.forEach(c=>{
+    const btn = document.createElement("button");
+    btn.dataset.v = c.code;
+    btn.textContent = currencySymbol(c.code) + " " + c.label;
+    if(c.code===expDisplayCurrency) btn.classList.add("active");
+    btn.addEventListener("click", ()=>{
+      expDisplayCurrency = c.code;
+      localStorage.setItem("expDisplayCurrency", expDisplayCurrency);
+      renderExpense();
+    });
+    toggle.appendChild(btn);
+  });
   const sym = currencySymbol(expDisplayCurrency);
 
   const all = items.filter(i=>i.tripId===activeTripId && (i.type==="spot"||i.type==="transport") && i.expense && i.expense.amount);
   if(flightSettings && flightSettings.expense){
-    all.push({ type:"flight", day:"航班", order:-1, name:"機票", expense:{ amount:flightSettings.expense, category:"交通", payer: flightSettings.expensePayer||"", currency: flightSettings.expenseCurrency||"CNY" } });
+    all.push({ type:"flight", day:"航班", order:-1, name:"機票", expense:{ amount:flightSettings.expense, category:"交通", payer: flightSettings.expensePayer||"", currency: flightSettings.expenseCurrency||primary } });
   }
-  const converted = i => convertCurrency(i.expense.amount, i.expense.currency||"CNY", expDisplayCurrency, rate);
+  const converted = i => convertCurrency(i.expense.amount, i.expense.currency||primary, expDisplayCurrency, rate);
   const total = all.reduce((s,i)=>s+converted(i),0);
   document.getElementById("expTotal").textContent = sym+Math.round(total).toLocaleString();
 
@@ -2096,26 +2217,28 @@ function renderExpense(){
     const row = document.createElement("div");
     row.className = "exp-item";
     const label = i.type==="transport" ? (TRANSPORT_LABEL[i.mode]||"交通") : i.name;
-    const origSym = currencySymbol(i.expense.currency||"CNY");
+    const origSym = currencySymbol(i.expense.currency||primaryCurrencyForTrip());
     row.innerHTML = `<div><div class="l">${escapeHtml(label)}</div><div class="d">${escapeHtml(i.day)} · ${escapeHtml(i.expense.category||"")}</div></div><div class="r">${origSym}${i.expense.amount.toLocaleString()}</div>`;
     listWrap.appendChild(row);
   });
 }
 document.getElementById("rateInput").addEventListener("change", (e)=>{
-  localStorage.setItem("cnyToTwdRate", e.target.value);
+  const primary = primaryCurrencyForTrip();
+  localStorage.setItem(rateStorageKeyFor(primary), e.target.value);
   renderExpense();
 });
 document.getElementById("rateFetchBtn").addEventListener("click", async ()=>{
   const btn = document.getElementById("rateFetchBtn");
   const originalText = btn.textContent;
+  const primary = primaryCurrencyForTrip();
   btn.textContent = "查詢中...";
   try{
-    const res = await fetch("https://open.er-api.com/v6/latest/CNY");
+    const res = await fetch(`https://open.er-api.com/v6/latest/${primary}`);
     const data = await res.json();
     if(data && data.rates && data.rates.TWD){
       const rate = Math.round(data.rates.TWD * 100) / 100;
       document.getElementById("rateInput").value = rate;
-      localStorage.setItem("cnyToTwdRate", rate);
+      localStorage.setItem(rateStorageKeyFor(primary), rate);
       renderExpense();
       btn.textContent = "✓ 已更新";
     } else {
@@ -2127,26 +2250,20 @@ document.getElementById("rateFetchBtn").addEventListener("click", async ()=>{
   }
   setTimeout(()=>{ btn.textContent = originalText; }, 2000);
 });
-document.querySelectorAll("#expCurrencyToggle button").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    expDisplayCurrency = btn.dataset.v;
-    localStorage.setItem("expDisplayCurrency", expDisplayCurrency);
-    renderExpense();
-  });
-});
 
 // ================= FLIGHT =================
 function populateAirportSelect(sel){
   sel.innerHTML = "";
-  Object.keys(AIRPORTS).forEach(code=>{
+  const airports = getAirportsForTrip();
+  Object.keys(airports).forEach(code=>{
     const opt = document.createElement("option");
-    opt.value = code; opt.textContent = AIRPORTS[code] + "（"+code+"）";
+    opt.value = code; opt.textContent = airports[code] + "（"+code+"）";
     sel.appendChild(opt);
   });
 }
 function populateAirlineSelect(sel){
   sel.innerHTML = "";
-  AIRLINES.forEach(a=>{
+  getAirlinesForTrip().forEach(a=>{
     const opt = document.createElement("option");
     opt.value = a; opt.textContent = a;
     sel.appendChild(opt);
@@ -2155,23 +2272,20 @@ function populateAirlineSelect(sel){
 
 let flightFormInit = false;
 function initFlightFormOnce(){
-  if(flightFormInit) return;
-  flightFormInit = true;
   populateAirlineSelect(document.getElementById("fsOutAirline"));
   populateAirlineSelect(document.getElementById("fsRetAirline"));
   populateAirportSelect(document.getElementById("fsOutFrom"));
   populateAirportSelect(document.getElementById("fsOutTo"));
   populateAirportSelect(document.getElementById("fsRetFrom"));
   populateAirportSelect(document.getElementById("fsRetTo"));
+  if(flightFormInit) return;
+  flightFormInit = true;
 
   const ids = ["fsOutAirline","fsOutFlightNo","fsOutFrom","fsOutTo",
     "fsOutDepartTime","fsOutArriveTime","fsRetAirline","fsRetFlightNo","fsRetFrom","fsRetTo",
     "fsRetDepartTime","fsRetArriveTime","fsHomeToAirport","fsCheckinBuffer","fsExpense","fsExpPayer"];
   ids.forEach(id=>{
     document.getElementById(id).addEventListener("change", scheduleSaveFlight);
-  });
-  fsCurrencyChips.querySelectorAll(".chip").forEach(chip=>{
-    chip.addEventListener("click", scheduleSaveFlight);
   });
 }
 
@@ -2209,17 +2323,19 @@ function renderFlightForm(){
   }
   cta.style.display = "none"; body.style.display = "block";
   initFlightFormOnce();
+  const trip = getActiveTrip();
+  const isJapan = trip && trip.region==="japan";
   const s = flightSettings || {};
   const setv = (id,v)=>{ document.getElementById(id).value = v || ""; };
   setv("fsOutAirline", s.outAirline || "中華 CI"); setv("fsOutFlightNo", s.outFlightNo);
-  setv("fsOutFrom", s.outFrom || "TPE"); setv("fsOutTo", s.outTo || "PVG");
+  setv("fsOutFrom", s.outFrom || "TPE"); setv("fsOutTo", s.outTo || (isJapan ? "NRT" : "PVG"));
   setv("fsOutDepartTime", s.outDepartTime); setv("fsOutArriveTime", s.outArriveTime);
   setv("fsRetAirline", s.retAirline || "中華 CI"); setv("fsRetFlightNo", s.retFlightNo);
-  setv("fsRetFrom", s.retFrom || "PVG"); setv("fsRetTo", s.retTo || "TPE");
+  setv("fsRetFrom", s.retFrom || (isJapan ? "NRT" : "PVG")); setv("fsRetTo", s.retTo || "TPE");
   setv("fsRetDepartTime", s.retDepartTime); setv("fsRetArriveTime", s.retArriveTime);
   setv("fsHomeToAirport", s.homeToAirport); setv("fsCheckinBuffer", s.checkinBuffer);
   setv("fsExpense", s.expense);
-  setCurrencyChip(fsCurrencyChips, s.expenseCurrency);
+  setCurrencyChip(fsCurrencyChips, s.expenseCurrency, scheduleSaveFlight);
   populatePayerSelect(document.getElementById("fsExpPayer"), document.getElementById("fsPayerWrap"), s.expensePayer);
 }
 
@@ -2236,6 +2352,19 @@ function buildOutboundFlightCard(){
   `;
   return card;
 }
+function buildReturnDeadlineReminder(){
+  const s = flightSettings || {};
+  if(!s.retDepartTime || !s.checkinBuffer) return null;
+  const [h,m] = s.retDepartTime.split(":").map(Number);
+  const buffer = (s.checkinBuffer||0) + (s.homeToAirport||0);
+  const total = h*60+m-buffer;
+  const dh = Math.floor(((total%1440)+1440)%1440/60), dm = (((total%1440)+1440)%1440)%60;
+  const div = document.createElement("div");
+  div.className = "deadline-reminder";
+  div.innerHTML = `⏰ 建議 <b>${String(dh).padStart(2,"0")}:${String(dm).padStart(2,"0")}</b> 前抵達機場報到（回程 ${s.retDepartTime} 起飛）`;
+  return div;
+}
+
 function buildReturnFlightCard(){
   const s = flightSettings || {};
   if(!s.retFlightNo && !s.retFrom) return null;
@@ -2245,7 +2374,8 @@ function buildReturnFlightCard(){
   let sub = "";
   if(s.retDepartTime && s.checkinBuffer){
     const [h,m] = s.retDepartTime.split(":").map(Number);
-    const total = h*60+m-s.checkinBuffer;
+    const buffer = (s.checkinBuffer||0) + (s.homeToAirport||0);
+    const total = h*60+m-buffer;
     const dh = Math.floor(((total%1440)+1440)%1440/60), dm = (((total%1440)+1440)%1440)%60;
     sub = `建議 ${String(dh).padStart(2,"0")}:${String(dm).padStart(2,"0")} 前抵達機場報到`;
   }
@@ -2369,7 +2499,7 @@ async function togglePackChecked(item){
   catch(e){ console.error("toggle packing failed", e); }
 }
 
-const BASIC_PACKING_LIST = [
+const BASIC_PACKING_LIST_CHINA = [
   { category:"證件", name:"護照", note:"效期需6個月以上" },
   { category:"證件", name:"台胞證", note:"" },
   { category:"證件", name:"機票/訂房證明", note:"電子或紙本備份" },
@@ -2392,6 +2522,30 @@ const BASIC_PACKING_LIST = [
   { category:"其他", name:"隨身小包", note:"放護照、手機、錢" },
   { category:"其他", name:"保溫瓶", note:"大陸公共場所常有熱水機" },
 ];
+const BASIC_PACKING_LIST_JAPAN = [
+  { category:"證件", name:"護照", note:"確認效期涵蓋整趟行程" },
+  { category:"證件", name:"機票/訂房證明", note:"電子或紙本備份" },
+  { category:"證件", name:"旅遊保險證明", note:"" },
+  { category:"證件", name:"證件影本/照片備份", note:"手機拍照存一份" },
+  { category:"金錢", name:"日圓現金", note:"神社/小吃攤/自動販賣機常只收現金" },
+  { category:"金錢", name:"信用卡", note:"大部分店家、便利商店都能刷" },
+  { category:"金錢", name:"交通IC卡", note:"Suica/Pasmo/ICOCA，搭車與超商付款都能用" },
+  { category:"電子", name:"手機充電器", note:"" },
+  { category:"電子", name:"行動電源", note:"" },
+  { category:"電子", name:"SIM卡/eSIM 或 WiFi機", note:"" },
+  { category:"藥品", name:"個人常備藥", note:"感冒藥、腸胃藥、止痛藥" },
+  { category:"藥品", name:"慢性病處方藥", note:"建議帶中/英文診斷證明" },
+  { category:"藥品", name:"暈車暈船藥", note:"長途交通用" },
+  { category:"盥洗衣物", name:"個人盥洗用品", note:"飯店可能不提供牙刷" },
+  { category:"盥洗衣物", name:"依天氣衣物", note:"" },
+  { category:"盥洗衣物", name:"拖鞋、口罩", note:"" },
+  { category:"其他", name:"隨身小包", note:"放護照、手機、錢" },
+  { category:"其他", name:"環保袋", note:"部分超商/藥妝店塑膠袋要另外收費" },
+];
+function getBasicPackingListForTrip(){
+  const trip = getActiveTrip();
+  return (trip && trip.region==="japan") ? BASIC_PACKING_LIST_JAPAN : BASIC_PACKING_LIST_CHINA;
+}
 
 function getSeasonalPackingItems(){
   const trip = getActiveTrip();
@@ -2399,7 +2553,7 @@ function getSeasonalPackingItems(){
   const month = new Date(trip.startDate+"T00:00:00").getMonth()+1; // 1-12
   if(month>=12 || month<=2){
     return [
-      { category:"盥洗衣物", name:"保暖外套/羽絨衣", note:"上海冬天濕冷，體感比溫度低" },
+      { category:"盥洗衣物", name:"保暖外套/羽絨衣", note:"冬季體感常比溫度低，注意保暖" },
       { category:"盥洗衣物", name:"圍巾/手套", note:"" },
       { category:"盥洗衣物", name:"發熱衣", note:"" },
     ];
@@ -2425,7 +2579,7 @@ function getSeasonalPackingItems(){
 }
 
 async function importBasicPackingList(){
-  const fullList = [...BASIC_PACKING_LIST, ...getSeasonalPackingItems()];
+  const fullList = [...getBasicPackingListForTrip(), ...getSeasonalPackingItems()];
   const existingNames = new Set(
     items.filter(i=>i.tripId===activeTripId && i.type==="packing").map(i=>i.name)
   );
@@ -2746,11 +2900,19 @@ function openTripModal(trip){
   document.getElementById("trName").value = trip ? trip.name : "";
   document.getElementById("trStart").value = trip ? (trip.startDate||"") : "";
   document.getElementById("trEnd").value = trip ? (trip.endDate||"") : "";
+  const region = trip ? (trip.region||"china") : "china";
+  document.querySelectorAll("#trRegionChips .chip").forEach(c=>c.classList.toggle("active", c.dataset.v===region));
   trMembersTemp = trip && trip.members ? [...trip.members] : [];
   renderMemberChips();
   tripListMask.classList.remove("show");
   tripModalMask.classList.add("show");
 }
+document.querySelectorAll("#trRegionChips .chip").forEach(chip=>{
+  chip.addEventListener("click", ()=>{
+    document.querySelectorAll("#trRegionChips .chip").forEach(c=>c.classList.remove("active"));
+    chip.classList.add("active");
+  });
+});
 function renderMemberChips(){
   trMembersChips.innerHTML = "";
   trMembersTemp.forEach((m,idx)=>{
@@ -2775,9 +2937,10 @@ tripModalMask.addEventListener("click",(e)=>{ if(e.target===tripModalMask && !fi
 document.getElementById("trSave").addEventListener("click", async ()=>{
   const name = document.getElementById("trName").value.trim();
   if(!name){ document.getElementById("trName").focus(); return; }
+  const selectedRegion = document.querySelector("#trRegionChips .chip.active")?.dataset.v || "china";
   const data = {
     name, startDate: document.getElementById("trStart").value, endDate: document.getElementById("trEnd").value,
-    members: trMembersTemp
+    members: trMembersTemp, region: selectedRegion
   };
   try{
     if(editingTripId){
