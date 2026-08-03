@@ -1427,9 +1427,11 @@ function openSpotModal(spot){
   const departWrap = document.getElementById("fDepartWrap");
   departWrap.style.display = isFirstPosition ? "block" : "none";
   document.getElementById("fDepartLabel").textContent = (isFirstPosition && hasFlightAnchor)
-    ? "出發時間（選填，例如出關/提領行李後的時間，跟航班抵達時間不同）"
+    ? "出發時間（預設抵達+30分鐘，供出關/提行李參考，可自行調整）"
     : "出發時間（選填，例如出門/離開飯店時間）";
-  document.getElementById("fDepartTime").value = spot ? (spot.departTime||"") : "";
+  document.getElementById("fDepartTime").value = spot
+    ? (spot.departTime||"")
+    : ((isFirstPosition && hasFlightAnchor && flightSettings.outArriveTime) ? addMinutesToTime(flightSettings.outArriveTime, 30) : "");
   document.getElementById("fStayMinutes").value = spot ? (spot.stayMinutes||"") : "";
   selectedSpotCat = spot ? (spot.category||"景點") : "景點";
   pendingCustomSpotCat = (spot && spot.category && !SPOT_BASE_CATS.includes(spot.category)) ? spot.category : null;
