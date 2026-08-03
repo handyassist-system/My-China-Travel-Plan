@@ -457,9 +457,13 @@
     <p id="tStationHint" style="font-size:11.5px; color:var(--seal); line-height:1.6; margin:-8px 0 12px; display:none;"></p>
     <p id="tEstimateHint" style="font-size:11px; color:var(--sub); margin:-8px 0 12px;">計程車/步行的預估時間會依直線距離自動估算（僅供參考），可自行修改</p>
     <div class="row2">
-      <div class="field">
+      <div class="field" id="tDepartFollowWrap">
         <label>出發時間（跟著上一個地點離開時間）</label>
         <div style="padding:12px 14px; border-radius:10px; background:var(--bg); border:1px solid var(--line); color:var(--ink); font-weight:600; font-size:15px;" id="tDepartDisplay">--:--</div>
+      </div>
+      <div class="field" id="tManualDepartWrap" style="display:none;">
+        <label>出發時間（這是當天第一段交通，請自行設定）</label>
+        <input id="tManualDepartTime" type="time">
       </div>
       <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="15"></div>
     </div>
@@ -1042,15 +1046,33 @@ function computeDerivedTimes(day){
   const arr = dayItems(day);
   const map = {};
   const s = flightSettings || {};
-  let clock = (day===days[0] && s.outArriveTime) ? s.outArriveTime : null;
+  const defaultAnchorForDay = (day===days[0] && s.outArriveTime) ? addMinutesToTime(s.outArriveTime, 30) : null;
+  let clock = null;
   arr.forEach((it, idx)=>{
     if(it.type==="spot"){
-      const arrival = (clock!==null) ? clock : (idx===0 ? (it.time||"") : "");
+      let arrival;
+      if(idx===0){
+        // The first spot's own "departTime" is the real anchor for the whole
+        // day (leaving the airport on day1, leaving the hotel on other days).
+        // If no transport segment precedes it, arrival == that anchor (0
+        // travel time assumed).
+        const anchor = it.departTime || defaultAnchorForDay || "";
+        arrival = anchor;
+      } else {
+        arrival = clock!==null ? clock : "";
+      }
       const leave = (arrival && it.stayMinutes) ? addMinutesToTime(arrival, it.stayMinutes) : arrival;
-      map[it.id] = { arrival, leave, isFirst: idx===0 && clock===null };
+      map[it.id] = { arrival, leave, isFirst:false };
       clock = leave || null;
     } else if(it.type==="transport"){
-      const depart = clock || "";
+      let depart;
+      if(idx===0){
+        // Leading transport (e.g. "+接機交通") has no previous spot to
+        // inherit a time from, so it needs its own manual anchor too.
+        depart = it.manualDepartTime || defaultAnchorForDay || "";
+      } else {
+        depart = clock || "";
+      }
       const arrive = (depart && it.duration) ? addMinutesToTime(depart, it.duration) : "";
       map[it.id] = { depart, arrive };
       clock = arrive || clock;
@@ -1143,7 +1165,7 @@ function buildAirportTransportGhost(spot, refTime, position){
   wrap.querySelector("button").addEventListener("click", ()=>{
     const order = position==="before" ? (spot.order - 1000) : (spot.order + 1000);
     pendingTransport = { day: currentDay, order, id: null };
-    openTransportModal(null, refTime||"");
+    openTransportModal(null, refTime||"", null, null, position==="before");
   });
   return wrap;
 }
@@ -1407,31 +1429,25 @@ function openSpotModal(spot){
   const arr = dayItems(currentDay);
   const hasFlightAnchor = (currentDay===days[0]) && !!(flightSettings && flightSettings.outArriveTime);
   const isFirstPosition = spot ? (arr.length>0 && arr[0].id===spot.id) : (arr.length===0);
-  const isEditable = isFirstPosition && !hasFlightAnchor;
+  const defaultAnchor = hasFlightAnchor ? addMinutesToTime(flightSettings.outArriveTime, 30) : "";
   const timeHint = document.getElementById("fTimeHint");
-  if(isEditable){
-    fTime.disabled = false;
-    fTime.value = spot ? (spot.time||"") : "";
-    timeHint.style.display = "none";
+
+  fTime.disabled = true;
+  const derived = computeDerivedTimes(currentDay);
+  fTime.value = spot && derived[spot.id] ? (derived[spot.id].arrival||"") : (isFirstPosition ? defaultAnchor : "");
+  if(isFirstPosition){
+    timeHint.textContent = "抵達時間＝下方「出發時間」（若有加交通段則再加交通時間），改「出發時間」即可調整";
   } else {
-    fTime.disabled = true;
-    const derived = computeDerivedTimes(currentDay);
-    fTime.value = spot && derived[spot.id] ? (derived[spot.id].arrival||"") : (isFirstPosition && hasFlightAnchor ? (flightSettings.outArriveTime||"") : "");
-    if(isFirstPosition && hasFlightAnchor){
-      timeHint.textContent = "第一天第一個地點時間由航班抵達時間自動決定，可在前面加「接機交通」段落調整";
-    } else {
-      timeHint.textContent = spot ? "此地點時間由前面行程自動算出（非第一個地點不能手動改）" : "儲存後會依前面行程自動算出抵達時間";
-    }
-    timeHint.style.display = "block";
+    timeHint.textContent = spot ? "此地點時間由前面行程自動算出（非第一個地點不能手動改）" : "儲存後會依前面行程自動算出抵達時間";
   }
+  timeHint.style.display = "block";
+
   const departWrap = document.getElementById("fDepartWrap");
   departWrap.style.display = isFirstPosition ? "block" : "none";
-  document.getElementById("fDepartLabel").textContent = (isFirstPosition && hasFlightAnchor)
-    ? "出發時間（預設抵達+30分鐘，供出關/提行李參考，可自行調整）"
-    : "出發時間（選填，例如出門/離開飯店時間）";
-  document.getElementById("fDepartTime").value = spot
-    ? (spot.departTime||"")
-    : ((isFirstPosition && hasFlightAnchor && flightSettings.outArriveTime) ? addMinutesToTime(flightSettings.outArriveTime, 30) : "");
+  document.getElementById("fDepartLabel").textContent = hasFlightAnchor
+    ? "出發時間（真正的起點，預設抵達+30分鐘，可自行調整）"
+    : "出發時間（真正的起點，例如出門/離開飯店時間）";
+  document.getElementById("fDepartTime").value = spot ? (spot.departTime||"") : defaultAnchor;
   document.getElementById("fStayMinutes").value = spot ? (spot.stayMinutes||"") : "";
   selectedSpotCat = spot ? (spot.category||"景點") : "景點";
   pendingCustomSpotCat = (spot && spot.category && !SPOT_BASE_CATS.includes(spot.category)) ? spot.category : null;
@@ -1572,12 +1588,16 @@ function addMinutesToTime(timeStr, minutes){
 }
 let currentTransportPrevTime = "";
 function updateArriveDisplay(){
-  const depart = currentTransportPrevTime;
+  const depart = currentTransportIsLeading ? document.getElementById("tManualDepartTime").value : currentTransportPrevTime;
   const dur = tDuration.value;
   const wrap = document.getElementById("tArriveWrap");
   const hint = document.getElementById("tNoTimeHint");
-  document.getElementById("tDepartDisplay").textContent = depart || "--:--";
-  hint.style.display = depart ? "none" : "block";
+  if(!currentTransportIsLeading){
+    document.getElementById("tDepartDisplay").textContent = depart || "--:--";
+    hint.style.display = depart ? "none" : "block";
+  } else {
+    hint.style.display = "none";
+  }
   if(depart && dur){
     document.getElementById("tArriveDisplay").textContent = addMinutesToTime(depart, dur);
     wrap.style.display = "block";
@@ -1587,6 +1607,8 @@ function updateArriveDisplay(){
 }
 tDuration.addEventListener("input", updateArriveDisplay);
 tDuration.addEventListener("change", updateArriveDisplay);
+document.getElementById("tManualDepartTime").addEventListener("input", updateArriveDisplay);
+document.getElementById("tManualDepartTime").addEventListener("change", updateArriveDisplay);
 
 // ---------- Distance-based transport estimate & Shanghai metro hints ----------
 function haversineKm(lat1, lng1, lat2, lng2){
@@ -1653,7 +1675,7 @@ function findNearestMetroStation(lat, lng){
 }
 
 
-function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride){
+function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, isLeadingOverride){
   pendingTransport.id = it ? it.id : null;
   currentTransportPrevTime = prevTime || "";
   selectedMode = it ? it.mode : "subway";
@@ -1666,14 +1688,28 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride){
   document.getElementById("tExpFields").style.display = hasExpense ? "block" : "none";
   document.getElementById("tExpToggle").style.display = hasExpense ? "none" : "block";
 
+  let isLeading = isLeadingOverride || false;
   if(it){
     const arr = dayItems(currentDay);
     const idx = arr.findIndex(x=>x.id===it.id);
     currentTransportPrevSpot = idx>0 ? arr[idx-1] : null;
     currentTransportNextSpot = idx<arr.length-1 ? arr[idx+1] : null;
+    isLeading = idx===0;
   } else {
     currentTransportPrevSpot = prevSpotOverride || null;
     currentTransportNextSpot = nextSpotOverride || null;
+  }
+  currentTransportIsLeading = isLeading;
+  const manualWrap = document.getElementById("tManualDepartWrap");
+  if(isLeading){
+    const s = flightSettings || {};
+    const defaultAnchor = (currentDay===days[0] && s.outArriveTime) ? addMinutesToTime(s.outArriveTime, 30) : "";
+    document.getElementById("tManualDepartTime").value = it ? (it.manualDepartTime||"") : defaultAnchor;
+    manualWrap.style.display = "block";
+    document.getElementById("tDepartFollowWrap").style.display = "none";
+  } else {
+    manualWrap.style.display = "none";
+    document.getElementById("tDepartFollowWrap").style.display = "block";
   }
   if(!it) applyDistanceEstimateIfEmpty();
   updateStationHint();
@@ -1684,6 +1720,7 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride){
 
 let currentTransportPrevSpot = null;
 let currentTransportNextSpot = null;
+let currentTransportIsLeading = false;
 
 function applyDistanceEstimateIfEmpty(){
   if(tDuration.value) return;
@@ -1728,6 +1765,7 @@ document.getElementById("transSave").addEventListener("click", async ()=>{
   const duration = tDuration.value ? Number(tDuration.value) : 0;
   const data = {
     type:"transport", tripId: activeTripId, mode: selectedMode, duration,
+    manualDepartTime: currentTransportIsLeading ? (document.getElementById("tManualDepartTime").value || "") : "",
     expense: { amount: tExpAmount.value ? Number(tExpAmount.value) : 0, category: "交通", payer: tExpPayer.value||"", currency: getCurrencyChip(tCurrencyChips) }
   };
   try{
