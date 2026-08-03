@@ -140,6 +140,9 @@
   .spot-note{font-size:12.5px; color:#4A4A4E; white-space:pre-wrap; word-break:break-word; margin:0 0 4px;}
   .spot-expense{font-size:12.5px; color:var(--green); font-weight:600;}
   .spot-actions{display:flex; flex-direction:row; gap:6px; justify-content:flex-end; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);}
+  .pack-card-compact{transition:padding 0.15s;}
+  .pack-actions-hidden{display:none; margin-top:0; padding-top:0; border-top:none;}
+  .pack-actions-show{display:flex !important; margin-top:8px !important; padding-top:8px !important; border-top:1px solid var(--line) !important;}
   .spot-actions button{width:27px; height:27px; border-radius:7px; border:none; background:var(--bg); color:var(--sub); font-size:12px;}
   .spot-actions button.del{color:var(--accent);}
 
@@ -2094,10 +2097,15 @@ const BASIC_PACKING_LIST = [
 ];
 
 async function importBasicPackingList(){
-  if(!confirm("要匯入基本必備清單嗎？會加入 "+BASIC_PACKING_LIST.length+" 個項目。")) return;
+  const existingNames = new Set(
+    items.filter(i=>i.tripId===activeTripId && i.type==="packing").map(i=>i.name)
+  );
+  const toAdd = BASIC_PACKING_LIST.filter(it=>!existingNames.has(it.name));
+  if(toAdd.length===0){ alert("清單裡的項目都已經加過了，沒有新的可以匯入。"); return; }
+  if(!confirm("要匯入基本必備清單嗎？會加入 "+toAdd.length+" 個新項目（已存在的同名項目會跳過）。")) return;
   try{
     const batch = db.batch();
-    BASIC_PACKING_LIST.forEach((it, idx)=>{
+    toAdd.forEach((it, idx)=>{
       const ref = db.collection(COLLECTION).doc();
       batch.set(ref, {
         type:"packing", tripId: activeTripId, category: it.category, name: it.name, note: it.note,
@@ -2110,6 +2118,31 @@ async function importBasicPackingList(){
 
 const SOUVENIR_CAT = "伴手禮";
 let packingViewMode = "checklist"; // "checklist" | "souvenir"
+let packingCategoryFilter = null;
+let _lastLongPressCard = null;
+
+function setupLongPressReveal(card){
+  let timer = null;
+  const reveal = ()=>{
+    if(_lastLongPressCard && _lastLongPressCard!==card){ _lastLongPressCard.classList.remove("pack-actions-show"); }
+    card.classList.add("pack-actions-show");
+    _lastLongPressCard = card;
+  };
+  card.addEventListener("touchstart", ()=>{ timer = setTimeout(reveal, 500); }, { passive:true });
+  card.addEventListener("touchend", ()=>{ clearTimeout(timer); });
+  card.addEventListener("touchmove", ()=>{ clearTimeout(timer); });
+  card.addEventListener("contextmenu", (e)=>{ e.preventDefault(); reveal(); });
+  card.addEventListener("mousedown", ()=>{ timer = setTimeout(reveal, 500); });
+  card.addEventListener("mouseup", ()=>{ clearTimeout(timer); });
+  card.addEventListener("mouseleave", ()=>{ clearTimeout(timer); });
+}
+document.addEventListener("click", (e)=>{
+  if(_lastLongPressCard && !_lastLongPressCard.contains(e.target)){
+    _lastLongPressCard.classList.remove("pack-actions-show");
+    _lastLongPressCard = null;
+  }
+});
+
 
 function movePackItem(item, direction){
   const arr = items.filter(i=>i.tripId===activeTripId && i.type==="packing" && (i.category||"其他")===(item.category||"其他"))
@@ -2142,6 +2175,11 @@ function renderPacking(){
   });
   wrap.appendChild(toggle);
 
+  const hint = document.createElement("p");
+  hint.style.cssText = "font-size:11.5px; color:var(--sub); text-align:center; margin:0 0 10px;";
+  hint.textContent = "💡 長按項目可以編輯、排序或刪除";
+  wrap.appendChild(hint);
+
   if(packingViewMode==="checklist"){
     const importBtn = document.createElement("button");
     importBtn.textContent = "📋 匯入基本必備清單";
@@ -2163,12 +2201,31 @@ function renderPacking(){
     return;
   }
 
-  const cats = packingViewMode==="souvenir" ? [SOUVENIR_CAT] : getAllPackingCategories().filter(c=>c!==SOUVENIR_CAT);
+  let cats = packingViewMode==="souvenir" ? [SOUVENIR_CAT] : getAllPackingCategories().filter(c=>c!==SOUVENIR_CAT).filter(c=>arr.some(i=>(i.category||"其他")===c));
+
+  if(packingViewMode==="checklist" && cats.length>1){
+    if(!cats.includes(packingCategoryFilter)) packingCategoryFilter = cats[0];
+    const sel = document.createElement("select");
+    sel.style.cssText = "width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line); font-size:15px; background:var(--card); margin-bottom:14px;";
+    cats.forEach(cat=>{
+      const count = arr.filter(i=>(i.category||"其他")===cat).length;
+      const opt = document.createElement("option");
+      opt.value = cat; opt.textContent = `${cat}（${count}項）`;
+      if(cat===packingCategoryFilter) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener("change", ()=>{ packingCategoryFilter = sel.value; renderPacking(); });
+    wrap.appendChild(sel);
+    cats = [packingCategoryFilter];
+  }
+
   cats.forEach(cat=>{
     const list = arr.filter(i=>(i.category||"其他")===cat).sort((a,b)=>a.order-b.order);
     if(list.length===0) return;
     const checkedCount = list.filter(i=>i.checked).length;
-    if(packingViewMode==="checklist"){
+    if(packingViewMode==="checklist" && cats.length>1){
+      // dropdown already shows the category name, skip the redundant header
+    } else if(packingViewMode==="checklist"){
       const header = document.createElement("div");
       header.style.cssText = "font-size:13px; font-weight:700; color:var(--accent); margin:14px 0 8px;";
       header.textContent = `${cat}（${checkedCount}/${list.length}）`;
@@ -2176,17 +2233,18 @@ function renderPacking(){
     }
     list.forEach((it, idx)=>{
       const card = document.createElement("div");
-      card.className = "spot-card";
-      card.style.marginBottom = "8px";
+      card.className = "spot-card pack-card-compact";
+      card.style.marginBottom = "2px";
+      card.style.padding = "9px 12px 9px 12px";
       card.innerHTML = `
         <div class="spot-main">
-          <div class="spot-icon" style="cursor:pointer;">${it.checked ? "✅" : "⬜"}</div>
+          <div class="spot-icon" style="cursor:pointer; width:30px; height:30px; font-size:14px;">${it.checked ? "✅" : "⬜"}</div>
           <div class="spot-body">
-            <p class="spot-name" style="${it.checked?'text-decoration:line-through; color:var(--sub);':''}">${escapeHtml(it.name)}</p>
+            <p class="spot-name" style="font-size:14px; ${it.checked?'text-decoration:line-through; color:var(--sub);':''}">${escapeHtml(it.name)}</p>
             ${it.note ? `<p class="spot-note">${escapeHtml(it.note)}</p>` : ""}
           </div>
         </div>
-        <div class="spot-actions">
+        <div class="spot-actions pack-actions-hidden">
           <button class="up" title="上移">▲</button>
           <button class="down" title="下移">▼</button>
           <button class="edit">✎</button>
@@ -2198,6 +2256,7 @@ function renderPacking(){
       card.querySelector(".down").addEventListener("click", ()=>movePackItem(it, 1));
       card.querySelector(".edit").addEventListener("click", ()=>openPackModal(it));
       card.querySelector(".del").addEventListener("click", ()=>deleteItem(it.id));
+      setupLongPressReveal(card);
       wrap.appendChild(card);
     });
   });
