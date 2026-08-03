@@ -370,8 +370,9 @@
     <div id="packingView" style="display:none; padding:14px 20px 190px;"></div>
 
     <div id="mapView" style="display:none;">
-      <div id="mapLegend" style="padding:14px 20px 0; display:flex; flex-wrap:wrap; gap:8px;"></div>
-      <div id="mapCanvas" style="height:calc(100vh - 260px); margin:14px 20px 190px; border-radius:16px; overflow:hidden; border:1px solid var(--line);"></div>
+      <div id="mapDayFilterWrap" style="padding:14px 20px 0;"></div>
+      <div id="mapLegend" style="padding:10px 20px 0; display:flex; flex-wrap:wrap; gap:8px;"></div>
+      <div id="mapCanvas" style="height:calc(100vh - 300px); margin:14px 20px 190px; border-radius:16px; overflow:hidden; border:1px solid var(--line);"></div>
     </div>
   </div>
 
@@ -444,10 +445,11 @@
     <h2>交通方式</h2>
     <div class="field"><label>方式</label>
       <div class="chip-row" id="transChips">
+        <div class="chip" data-v="jr" id="jrChip" style="display:none;">🚃 JR</div>
         <div class="chip" data-v="subway">🚇 地鐵/公車</div>
         <div class="chip" data-v="taxi">🚕 計程車</div>
         <div class="chip" data-v="walk">🚶 步行</div>
-        <div class="chip" data-v="train">🚄 高鐵</div>
+        <div class="chip" data-v="train">🚄 高鐵/新幹線</div>
       </div>
     </div>
     <p id="tStationHint" style="font-size:11.5px; color:var(--seal); line-height:1.6; margin:-8px 0 12px; display:none;"></p>
@@ -655,8 +657,8 @@ db.collection(COLLECTION).limit(1).get()
 
 const HOLDING = "_holding";
 const AUTH_CODE = "0430";
-const TRANSPORT_ICON = { subway:"🚇", taxi:"🚕", walk:"🚶", train:"🚄" };
-const TRANSPORT_LABEL = { subway:"地鐵/公車", taxi:"計程車", walk:"步行", train:"高鐵" };
+const TRANSPORT_ICON = { jr:"🚃", subway:"🚇", taxi:"🚕", walk:"🚶", train:"🚄" };
+const TRANSPORT_LABEL = { jr:"JR", subway:"地鐵/公車", taxi:"計程車", walk:"步行", train:"高鐵/新幹線" };
 const CATEGORY_ICON = { "景點":"🏛️", "餐廳":"🍜", "飯店":"🛏️", "其他":"📌" };
 
 let items = [];       // all firestore docs (all trips)
@@ -943,15 +945,34 @@ function colorForDay(day){
 }
 
 let mapInstance = null;
+let mapDayFilter = "all";
 function renderMap(){
   const canvas = document.getElementById("mapCanvas");
   const legend = document.getElementById("mapLegend");
+  const filterWrap = document.getElementById("mapDayFilterWrap");
   legend.innerHTML = "";
+  filterWrap.innerHTML = "";
   if(!getActiveTrip()){
     canvas.innerHTML = "";
     canvas.appendChild(noTripCTA());
     return;
   }
+  if(!days.includes(mapDayFilter)) mapDayFilter = "all";
+  const sel = document.createElement("select");
+  sel.style.cssText = "width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line); font-size:15px; background:var(--card);";
+  const allOpt = document.createElement("option");
+  allOpt.value = "all"; allOpt.textContent = "全部天數";
+  if(mapDayFilter==="all") allOpt.selected = true;
+  sel.appendChild(allOpt);
+  days.forEach(d=>{
+    const opt = document.createElement("option");
+    opt.value = d; opt.textContent = d;
+    if(mapDayFilter===d) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change", ()=>{ mapDayFilter = sel.value; renderMap(); });
+  filterWrap.appendChild(sel);
+
   if(!(window.google && google.maps)){
     canvas.innerHTML = "";
     const msg = document.createElement("div");
@@ -960,8 +981,9 @@ function renderMap(){
     canvas.appendChild(msg);
     return;
   }
-  const spots = items.filter(i=>i.tripId===activeTripId && i.type==="spot" && i.lat!=null && i.lng!=null);
-  days.forEach(d=>{
+  const daysToShow = mapDayFilter==="all" ? days : [mapDayFilter];
+  const spots = items.filter(i=>i.tripId===activeTripId && i.type==="spot" && i.lat!=null && i.lng!=null && daysToShow.includes(i.day));
+  daysToShow.forEach(d=>{
     const chip = document.createElement("div");
     chip.style.cssText = `display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); padding:5px 10px; border-radius:999px;`;
     chip.innerHTML = `<span style="width:9px;height:9px;border-radius:50%;background:${colorForDay(d)};display:inline-block;"></span>${d}`;
@@ -971,14 +993,16 @@ function renderMap(){
     canvas.innerHTML = "";
     const msg = document.createElement("div");
     msg.className = "empty";
-    msg.innerHTML = `<span class="emoji">📍</span>還沒有帶座標的地點<br>透過搜尋建議新增的地點才會顯示在地圖上`;
+    msg.innerHTML = mapDayFilter==="all"
+      ? `<span class="emoji">📍</span>還沒有帶座標的地點<br>透過搜尋建議新增的地點才會顯示在地圖上`
+      : `<span class="emoji">📍</span>「${mapDayFilter}」還沒有帶座標的地點`;
     canvas.appendChild(msg);
     return;
   }
   canvas.innerHTML = "";
   mapInstance = new google.maps.Map(canvas, { zoom: 12, center:{lat:spots[0].lat,lng:spots[0].lng}, disableDefaultUI:true, zoomControl:true });
   const bounds = new google.maps.LatLngBounds();
-  days.forEach(d=>{
+  daysToShow.forEach(d=>{
     const daySpots = dayItems(d).filter(i=>i.type==="spot" && i.lat!=null && i.lng!=null);
     daySpots.forEach((s, idx)=>{
       const pos = { lat: s.lat, lng: s.lng };
@@ -1721,6 +1745,8 @@ function findNearestMetroStation(lat, lng){
 function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, isLeadingOverride){
   pendingTransport.id = it ? it.id : null;
   currentTransportPrevTime = prevTime || "";
+  const tripForModal = getActiveTrip();
+  document.getElementById("jrChip").style.display = (tripForModal && tripForModal.region==="japan") ? "block" : "none";
   selectedMode = it ? it.mode : "subway";
   transChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedMode));
   tDuration.value = it ? (it.duration||"") : "";
@@ -1777,12 +1803,14 @@ function applyDistanceEstimateIfEmpty(){
 
 function updateStationHint(){
   const el = document.getElementById("tStationHint");
-  if(selectedMode!=="subway"){ el.style.display = "none"; return; }
+  if(selectedMode!=="subway" && selectedMode!=="jr"){ el.style.display = "none"; return; }
   const trip = getActiveTrip();
   if(trip && trip.region==="japan"){
     updateStationHintJapan(el);
-  } else {
+  } else if(selectedMode==="subway"){
     updateStationHintChina(el);
+  } else {
+    el.style.display = "none";
   }
 }
 
