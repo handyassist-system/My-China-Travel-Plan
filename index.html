@@ -2607,29 +2607,69 @@ document.getElementById("editTripShortcut").addEventListener("click", ()=>{
   if(trip) openTripModal(trip);
 });
 
+function timeOfDayLabel(timeStr){
+  if(!timeStr) return "未定時間";
+  const h = parseInt(timeStr.split(":")[0], 10);
+  if(h < 12) return "早上";
+  if(h < 18) return "下午";
+  return "晚上";
+}
+
 function buildShareText(){
   const trip = getActiveTrip();
+  const s = flightSettings || {};
   const lines = [];
-  lines.push(`【${trip ? trip.name : "行程"}】`);
-  days.forEach(day=>{
-    const dateLabel = computeDateForDay(day);
+  lines.push(trip ? trip.name : "行程");
+
+  if(s.outFlightNo || s.outFrom){
     lines.push("");
-    lines.push(`▶ ${day}${dateLabel ? "　"+dateLabel : ""}`);
+    lines.push("✈️ 去程航班");
+    lines.push(`${s.outAirline||""} ${s.outFlightNo||""}　${AIRPORTS[s.outFrom]||s.outFrom||""} ${s.outDepartTime||"--:--"} → ${AIRPORTS[s.outTo]||s.outTo||""} ${s.outArriveTime||"--:--"}`.trim());
+  }
+
+  days.forEach((day, dayIdx)=>{
+    if(dayIdx>0){ lines.push(""); lines.push("──────────"); }
+    lines.push("");
+    const dateLabel = computeDateForDay(day);
+    lines.push(`${day}${dateLabel ? "（"+dateLabel+"）" : ""}`);
+
     const derived = computeDerivedTimes(day);
     const arr = dayItems(day);
     if(arr.length===0){ lines.push("（尚未安排）"); return; }
+
+    // Build display rows: each spot gets an optional "(交通方式 約X分)" suffix
+    // from the transport that immediately precedes it.
+    const rows = [];
+    let pendingTransportLabel = null;
     arr.forEach(it=>{
-      if(it.type==="spot"){
+      if(it.type==="transport"){
+        pendingTransportLabel = `${TRANSPORT_LABEL[it.mode]||""}${it.duration ? " 約"+it.duration+"分" : ""}`;
+      } else if(it.type==="spot"){
         const d = derived[it.id] || {};
-        const timeStr = d.arrival || "未定";
-        let line = `• ${timeStr} ${it.name}`;
-        if(it.note){ line += `（${it.note}）`; }
-        lines.push(line);
-      } else if(it.type==="transport"){
-        lines.push(`　${TRANSPORT_ICON[it.mode]||"🚇"}${TRANSPORT_LABEL[it.mode]||""}`);
+        rows.push({ time: d.arrival || "", name: it.name, transport: pendingTransportLabel });
+        pendingTransportLabel = null;
       }
     });
+
+    let lastGroup = null;
+    rows.forEach(row=>{
+      const group = timeOfDayLabel(row.time);
+      if(group !== lastGroup){
+        lines.push(`──── ${group} ────`);
+        lastGroup = group;
+      }
+      const timeStr = row.time || "未定";
+      const transportSuffix = row.transport ? `（${row.transport}）` : "";
+      lines.push(`${timeStr} ${row.name}${transportSuffix}`);
+    });
   });
+
+  if(s.retFlightNo || s.retFrom){
+    lines.push("");
+    lines.push("✈️ 回程航班");
+    lines.push(`${s.retAirline||""} ${s.retFlightNo||""}　${AIRPORTS[s.retFrom]||s.retFrom||""} ${s.retDepartTime||"--:--"} → ${AIRPORTS[s.retTo]||s.retTo||""} ${s.retArriveTime||"--:--"}`.trim());
+  }
+
   return lines.join("\n");
 }
 
