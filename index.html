@@ -453,6 +453,14 @@
       </div>
     </div>
     <p id="tStationHint" style="font-size:11.5px; color:var(--seal); line-height:1.6; margin:-8px 0 12px; display:none;"></p>
+    <div class="row2" id="tJrStationPickWrap" style="display:none;">
+      <div class="field"><label>出發車站（找不到時手動選）</label><select id="tJrFromStation"></select></div>
+      <div class="field"><label>抵達車站（找不到時手動選）</label><select id="tJrToStation"></select></div>
+    </div>
+    <div class="row2" id="tJrCustomForm" style="display:none; margin:-6px 0 12px;">
+      <input id="tJrCustomInput" type="text" placeholder="輸入車站名稱" style="flex:1; padding:12px 14px; border-radius:12px; border:1px solid var(--line); font-size:15px; background:var(--bg);">
+      <button id="tJrCustomConfirm" class="btn btn-ghost" style="flex:0 0 auto; padding:0 16px;">加入</button>
+    </div>
     <p id="tEstimateHint" style="font-size:11px; color:var(--sub); margin:-8px 0 12px;">計程車/步行的預估時間會依直線距離自動估算（僅供參考），可自行修改</p>
     <div class="row2">
       <div class="field" id="tDepartFollowWrap">
@@ -1259,7 +1267,8 @@ function buildTransportChip(it, d){
   row.className = "transport-row";
   const exp = it.expense && it.expense.amount ? `<span class="exp">${currencySymbol(it.expense.currency)}${it.expense.amount}</span>` : "";
   const timeStr = (d.depart && d.arrive) ? `${d.depart}→${d.arrive} · ` : "";
-  row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}約${it.duration||"?"}分${exp}</div>`;
+  const stationStr = (it.manualFromStation || it.manualToStation) ? ` · ${it.manualFromStation||"?"}→${it.manualToStation||"?"}` : "";
+  row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}約${it.duration||"?"}分${exp}${stationStr}</div>`;
   row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it, d.depart));
   return row;
 }
@@ -1642,6 +1651,13 @@ transChips.querySelectorAll(".chip").forEach(chip=>{
     applyDistanceEstimateIfEmpty();
     updateStationHint();
     updateArriveDisplay();
+    const tripForChip = getActiveTrip();
+    const isJapanTransitMode = tripForChip && tripForChip.region==="japan" && (selectedMode==="jr" || selectedMode==="subway");
+    document.getElementById("tJrStationPickWrap").style.display = isJapanTransitMode ? "flex" : "none";
+    if(isJapanTransitMode){
+      populateJrStationSelect(document.getElementById("tJrFromStation"), document.getElementById("tJrFromStation").value);
+      populateJrStationSelect(document.getElementById("tJrToStation"), document.getElementById("tJrToStation").value);
+    }
   });
 });
 
@@ -1741,6 +1757,101 @@ function findNearestMetroStation(lat, lng){
   return { name: best.name, distanceKm: bestDist };
 }
 
+// Approximate coordinates of major JR (and key connecting) stations across
+// Japan's most-visited regions. Reference only — not survey-grade.
+const JAPAN_JR_STATIONS = [
+  // Tokyo
+  {name:"東京駅", lat:35.6812, lng:139.7671}, {name:"新宿駅", lat:35.6896, lng:139.7006},
+  {name:"渋谷駅", lat:35.6580, lng:139.7016}, {name:"品川駅", lat:35.6285, lng:139.7387},
+  {name:"上野駅", lat:35.7141, lng:139.7774}, {name:"池袋駅", lat:35.7295, lng:139.7109},
+  {name:"秋葉原駅", lat:35.6984, lng:139.7731}, {name:"新橋駅", lat:35.6665, lng:139.7583},
+  {name:"浜松町駅", lat:35.6553, lng:139.7570}, {name:"原宿駅", lat:35.6702, lng:139.7027},
+  {name:"神田駅", lat:35.6917, lng:139.7708}, {name:"有楽町駅", lat:35.6751, lng:139.7631},
+  {name:"成田空港駅", lat:35.7719, lng:140.3928}, {name:"羽田空港第1・第2ターミナル駅", lat:35.5493, lng:139.7798},
+  // Yokohama
+  {name:"横浜駅", lat:35.4657, lng:139.6222}, {name:"鎌倉駅", lat:35.3193, lng:139.5497},
+  // Nagoya
+  {name:"名古屋駅", lat:35.1709, lng:136.8815},
+  // Osaka
+  {name:"大阪駅", lat:34.7024, lng:135.4959}, {name:"新大阪駅", lat:34.7333, lng:135.5002},
+  {name:"天王寺駅", lat:34.6457, lng:135.5138}, {name:"京橋駅", lat:34.6969, lng:135.5340},
+  {name:"西九条駅", lat:34.6820, lng:135.4643}, {name:"難波駅", lat:34.6664, lng:135.5010},
+  {name:"関西空港駅", lat:34.4320, lng:135.2304}, {name:"天満駅", lat:34.7070, lng:135.5115},
+  // Kyoto
+  {name:"京都駅", lat:34.9858, lng:135.7588}, {name:"嵯峨嵐山駅", lat:35.0160, lng:135.6790},
+  {name:"稲荷駅", lat:34.9670, lng:135.7727}, {name:"二条駅", lat:35.0106, lng:135.7386},
+  {name:"梅小路京都西駅", lat:34.9870, lng:135.7470},
+  // Kobe
+  {name:"三ノ宮駅", lat:34.6951, lng:135.1956}, {name:"神戸駅", lat:34.6795, lng:135.1780},
+  {name:"元町駅", lat:34.6900, lng:135.1880}, {name:"新神戸駅", lat:34.7060, lng:135.1970},
+  // Nara
+  {name:"奈良駅", lat:34.6870, lng:135.8050},
+  // Tottori
+  {name:"鳥取駅", lat:35.5010, lng:134.2378}, {name:"倉吉駅", lat:35.4300, lng:133.8180},
+  {name:"米子駅", lat:35.4270, lng:133.3310}, {name:"由良駅", lat:35.4560, lng:133.7350},
+  // Hiroshima
+  {name:"広島駅", lat:34.3975, lng:132.4753}, {name:"宮島口駅", lat:34.3113, lng:132.3020},
+  // Fukuoka
+  {name:"博多駅", lat:33.5896, lng:130.4207}, {name:"小倉駅", lat:33.8865, lng:130.8823},
+  // Sapporo / Sendai
+  {name:"札幌駅", lat:43.0686, lng:141.3508}, {name:"仙台駅", lat:38.2601, lng:140.8823},
+  // Okinawa
+  {name:"那覇空港駅", lat:26.1958, lng:127.6459},
+];
+function findNearestJRStation(lat, lng){
+  if(lat==null || lng==null) return null;
+  let best = null, bestDist = Infinity;
+  JAPAN_JR_STATIONS.forEach(s=>{
+    const d = haversineKm(lat, lng, s.lat, s.lng);
+    if(d < bestDist){ bestDist = d; best = s; }
+  });
+  if(!best || bestDist > 1.5) return null; // not close enough to be a useful hint
+  return { name: best.name, distanceKm: bestDist };
+}
+
+let jrStationCustomList = [];
+function getAllJrStationNames(){
+  return [...JAPAN_JR_STATIONS.map(s=>s.name), ...jrStationCustomList];
+}
+function populateJrStationSelect(selectEl, selectedValue){
+  selectEl.innerHTML = "";
+  const noneOpt = document.createElement("option");
+  noneOpt.value = ""; noneOpt.textContent = "（不指定）";
+  selectEl.appendChild(noneOpt);
+  const names = getAllJrStationNames();
+  if(selectedValue && !names.includes(selectedValue)){
+    jrStationCustomList.push(selectedValue);
+    names.push(selectedValue);
+  }
+  names.forEach(name=>{
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = name;
+    if(name===selectedValue) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+  const addOpt = document.createElement("option");
+  addOpt.value = "__custom__"; addOpt.textContent = "＋ 自訂車站名稱";
+  selectEl.appendChild(addOpt);
+}
+let jrCustomTargetSelect = null;
+[document.getElementById("tJrFromStation"), document.getElementById("tJrToStation")].forEach(sel=>{
+  sel.addEventListener("change", ()=>{
+    if(sel.value==="__custom__"){
+      jrCustomTargetSelect = sel;
+      document.getElementById("tJrCustomForm").style.display = "flex";
+      document.getElementById("tJrCustomInput").value = "";
+      document.getElementById("tJrCustomInput").focus();
+      sel.value = "";
+    }
+  });
+});
+document.getElementById("tJrCustomConfirm").addEventListener("click", ()=>{
+  const name = document.getElementById("tJrCustomInput").value.trim();
+  if(!name || !jrCustomTargetSelect) return;
+  populateJrStationSelect(jrCustomTargetSelect, name);
+  document.getElementById("tJrCustomForm").style.display = "none";
+});
+
 
 function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, isLeadingOverride){
   pendingTransport.id = it ? it.id : null;
@@ -1783,6 +1894,15 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, is
   if(!it) applyDistanceEstimateIfEmpty();
   updateStationHint();
   updateArriveDisplay();
+
+  const isJapanTransitMode = tripForModal && tripForModal.region==="japan" && (selectedMode==="jr" || selectedMode==="subway");
+  document.getElementById("tJrStationPickWrap").style.display = isJapanTransitMode ? "flex" : "none";
+  if(isJapanTransitMode){
+    populateJrStationSelect(document.getElementById("tJrFromStation"), it ? (it.manualFromStation||"") : "");
+    populateJrStationSelect(document.getElementById("tJrToStation"), it ? (it.manualToStation||"") : "");
+  }
+  document.getElementById("tJrCustomForm").style.display = "none";
+
   document.getElementById("transDelete").style.display = it ? "block" : "none";
   transModalMask.classList.add("show");
 }
@@ -1830,9 +1950,20 @@ function updateStationHintChina(el){
 function updateStationHintJapan(el){
   const p = currentTransportPrevSpot, n = currentTransportNextSpot;
   if(!p || !n || p.lat==null || n.lat==null){ el.style.display = "none"; return; }
+  const parts = [];
+  const ps = findNearestJRStation(p.lat, p.lng);
+  const ns = findNearestJRStation(n.lat, n.lng);
+  if(ps) parts.push(`出發點附近：${ps.name}（約${ps.distanceKm.toFixed(1)}km）`);
+  if(ns) parts.push(`抵達點附近：${ns.name}（約${ns.distanceKm.toFixed(1)}km）`);
   const url = `https://www.google.com/maps/dir/?api=1&origin=${p.lat},${p.lng}&destination=${n.lat},${n.lng}&travelmode=transit`;
-  el.innerHTML = `🚃 <a href="${url}" target="_blank" rel="noopener" style="color:var(--seal); text-decoration:underline; font-weight:600;">在Google地圖查看電車路線／JR Pass適用線路</a>`
-    + `<br><span style="color:var(--sub); font-weight:400; font-size:10.5px;">會另開Google地圖App/網頁，查完自己回來填時間即可</span>`;
+  const link = `<a href="${url}" target="_blank" rel="noopener" style="color:var(--seal); text-decoration:underline; font-weight:600;">在Google地圖查看電車路線／JR Pass適用線路</a>`;
+  if(parts.length){
+    el.innerHTML = "🚃 " + parts.join("　") + `<br>${link}`
+      + `<br><span style="color:var(--sub); font-weight:400; font-size:10.5px;">車站為概略位置僅供參考，實際搭乘請自行確認</span>`;
+  } else {
+    el.innerHTML = "🚃 附近1.5km內沒有資料庫裡的JR站，請用下方選單選擇車站，或點連結查詢"
+      + `<br>${link}`;
+  }
   el.style.display = "block";
 }
 
@@ -1856,6 +1987,8 @@ document.getElementById("transSave").addEventListener("click", async ()=>{
   const data = {
     type:"transport", tripId: activeTripId, mode: selectedMode, duration,
     manualDepartTime: currentTransportIsLeading ? (document.getElementById("tManualDepartTime").value || "") : "",
+    manualFromStation: document.getElementById("tJrFromStation").value==="__custom__" ? "" : (document.getElementById("tJrFromStation").value || ""),
+    manualToStation: document.getElementById("tJrToStation").value==="__custom__" ? "" : (document.getElementById("tJrToStation").value || ""),
     expense: { amount: tExpAmount.value ? Number(tExpAmount.value) : 0, category: "交通", payer: tExpPayer.value||"", currency: getCurrencyChip(tCurrencyChips) }
   };
   try{
