@@ -1100,6 +1100,10 @@ function renderDayList(){
     empty.className = "empty";
     empty.innerHTML = `<span class="emoji">🗺️</span>「${currentDay}」還沒有安排行程<br>點右下角 ＋ 開始新增`;
     list.appendChild(empty);
+    if(currentDay === days[days.length-1]){
+      const c = buildReturnFlightCard();
+      if(c) list.appendChild(c);
+    }
     return;
   }
   for(let idx=0; idx<arr.length; idx++){
