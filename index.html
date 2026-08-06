@@ -582,6 +582,7 @@
         <button id="trAddMemberBtn" class="btn btn-ghost" style="flex:0 0 auto; padding:0 16px;">加入</button>
       </div>
     </div>
+    <div class="field"><label>備註（選填）</label><textarea id="trNotes" placeholder="任何想記的事，例如簽證資訊、住宿地址、特殊注意事項..."></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="trCancel">取消</button>
       <button class="btn btn-primary" id="trSave">儲存</button>
@@ -3020,6 +3021,7 @@ function openTripModal(trip){
   document.getElementById("trName").value = trip ? trip.name : "";
   document.getElementById("trStart").value = trip ? (trip.startDate||"") : "";
   document.getElementById("trEnd").value = trip ? (trip.endDate||"") : "";
+  document.getElementById("trNotes").value = trip ? (trip.notes||"") : "";
   const region = trip ? (trip.region||"china") : "china";
   document.querySelectorAll("#trRegionChips .chip").forEach(c=>c.classList.toggle("active", c.dataset.v===region));
   trMembersTemp = trip && trip.members ? [...trip.members] : [];
@@ -3060,7 +3062,7 @@ document.getElementById("trSave").addEventListener("click", async ()=>{
   const selectedRegion = document.querySelector("#trRegionChips .chip.active")?.dataset.v || "china";
   const data = {
     name, startDate: document.getElementById("trStart").value, endDate: document.getElementById("trEnd").value,
-    members: trMembersTemp, region: selectedRegion
+    members: trMembersTemp, region: selectedRegion, notes: document.getElementById("trNotes").value.trim()
   };
   try{
     if(editingTripId){
