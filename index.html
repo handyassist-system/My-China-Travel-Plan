@@ -599,6 +599,7 @@
     <div class="field"><label>目標天數</label><select id="copyDaySelect"></select></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="copyDayCancel">取消</button>
+      <button class="btn btn-ghost" id="moveDayConfirm" style="display:none; color:var(--seal); border:1px solid var(--seal);">移動</button>
       <button class="btn btn-primary" id="copyDayConfirm">複製</button>
     </div>
   </div>
@@ -2072,8 +2073,9 @@ function populateCopyDaySelect(excludeCurrent){
 }
 function openCopySpotPicker(spot){
   copyContext = { mode:"spot", spot };
-  document.getElementById("copyDayTitle").textContent = `複製「${spot.name}」到哪一天？`;
+  document.getElementById("copyDayTitle").textContent = `複製/移動「${spot.name}」到哪一天？`;
   document.getElementById("copyDayConfirm").textContent = "複製";
+  document.getElementById("moveDayConfirm").style.display = "inline-block";
   populateCopyDaySelect(false);
   copyDayModalMask.classList.add("show");
 }
@@ -2081,6 +2083,7 @@ document.getElementById("swapDayShortcut").addEventListener("click", ()=>{
   copyContext = { mode:"swap" };
   document.getElementById("copyDayTitle").textContent = `「${currentDay}」要跟哪一天互換？`;
   document.getElementById("copyDayConfirm").textContent = "交換";
+  document.getElementById("moveDayConfirm").style.display = "none";
   populateCopyDaySelect(true);
   copyDayModalMask.classList.add("show");
 });
@@ -2100,6 +2103,32 @@ document.getElementById("copyDayConfirm").addEventListener("click", async ()=>{
     copyDayModalMask.classList.remove("show");
   }catch(e){ console.error("copy/swap failed", e); alert("操作失敗，請檢查網路連線"); }
 });
+
+document.getElementById("moveDayConfirm").addEventListener("click", async ()=>{
+  const targetDay = document.getElementById("copyDaySelect").value;
+  if(!targetDay || !copyContext || copyContext.mode!=="spot") return;
+  try{
+    await moveSpotToDay(copyContext.spot, targetDay);
+    copyDayModalMask.classList.remove("show");
+  }catch(e){ console.error("move failed", e); alert("移動失敗，請檢查網路連線"); }
+});
+
+async function moveSpotToDay(spot, targetDay){
+  if(targetDay===spot.day) return;
+  const arr = dayItems(spot.day);
+  const idx = arr.findIndex(i=>i.id===spot.id);
+  const toDeleteTransports = [];
+  if(idx>0 && arr[idx-1].type==="transport") toDeleteTransports.push(arr[idx-1].id);
+  if(idx<arr.length-1 && arr[idx+1].type==="transport") toDeleteTransports.push(arr[idx+1].id);
+  if(toDeleteTransports.length){
+    if(!confirm("這個地點前後連接的交通段會一併移除（因為換天後不再相鄰），確定要移動嗎？")) return;
+  }
+  const order = computeOrder(targetDay);
+  const batch = db.batch();
+  batch.update(db.collection(COLLECTION).doc(spot.id), { day: targetDay, order });
+  toDeleteTransports.forEach(id=>batch.delete(db.collection(COLLECTION).doc(id)));
+  await batch.commit();
+}
 
 async function copyItemsToDay(sourceItems, targetDay){
   if(sourceItems.length===0) return;
