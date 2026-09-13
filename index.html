@@ -474,7 +474,7 @@
         <label>出發時間（這是當天第一段交通，請自行設定）</label>
         <input id="tManualDepartTime" type="time">
       </div>
-      <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="15"></div>
+      <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="請輸入分鐘數"></div>
     </div>
     <div class="field" id="tArriveWrap" style="display:none;">
       <label>抵達時間（自動計算）</label>
@@ -1016,19 +1016,18 @@ function renderMap(){
   mapInstance = new google.maps.Map(canvas, { zoom: 12, center:{lat:spots[0].lat,lng:spots[0].lng}, disableDefaultUI:true, zoomControl:true });
   const bounds = new google.maps.LatLngBounds();
   const infoWindow = new google.maps.InfoWindow();
-  let seq = 0;
   daysToShow.forEach(d=>{
     const daySpots = dayItems(d).filter(i=>i.type==="spot" && i.lat!=null && i.lng!=null);
-    daySpots.forEach((s)=>{
-      seq++;
+    daySpots.forEach((s, idx)=>{
+      const num = idx+1;
       const pos = { lat: s.lat, lng: s.lng };
       const marker = new google.maps.Marker({
-        position: pos, map: mapInstance, title: `${d} #${seq} ${s.name}`,
-        label: { text: String(seq), color:"#fff", fontSize:"12px", fontWeight:"700" },
+        position: pos, map: mapInstance, title: `${d} #${num} ${s.name}`,
+        label: { text: String(num), color:"#fff", fontSize:"12px", fontWeight:"700" },
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: colorForDay(d), fillOpacity: 1, strokeColor:"#fff", strokeWeight:2 }
       });
       marker.addListener("click", ()=>{
-        infoWindow.setContent(`<div style="font-family:inherit; padding:2px 4px;"><b>${seq}. ${escapeHtml(s.name)}</b><br><span style="color:#888; font-size:12px;">${d}${s.category ? " · "+escapeHtml(s.category) : ""}</span></div>`);
+        infoWindow.setContent(`<div style="font-family:inherit; padding:2px 4px;"><b>${d} #${num}　${escapeHtml(s.name)}</b><br><span style="color:#888; font-size:12px;">${escapeHtml(s.category||"")}</span></div>`);
         infoWindow.open(mapInstance, marker);
       });
       bounds.extend(pos);
@@ -1284,7 +1283,8 @@ function buildTransportChip(it, d){
   const exp = it.expense && it.expense.amount ? `<span class="exp">${currencySymbol(it.expense.currency)}${it.expense.amount}</span>` : "";
   const timeStr = (d.depart && d.arrive) ? `${d.depart}→${d.arrive} · ` : "";
   const stationStr = (it.manualFromStation || it.manualToStation) ? ` · ${it.manualFromStation||"?"}→${it.manualToStation||"?"}` : "";
-  row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}約${it.duration||"?"}分${exp}${stationStr}</div>`;
+  const durationStr = it.duration ? `約${it.duration}分` : `<span style="color:var(--seal); font-weight:600;">尚未填時間</span>`;
+  row.innerHTML = `<div class="transport-chip">${TRANSPORT_ICON[it.mode]||"🚇"} ${TRANSPORT_LABEL[it.mode]||""} · ${timeStr}${durationStr}${exp}${stationStr}</div>`;
   row.querySelector(".transport-chip").addEventListener("click", ()=>openTransportModal(it, d.depart));
   return row;
 }
@@ -1952,6 +1952,9 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, is
     currentTransportNextSpot = nextSpotOverride || null;
   }
   currentTransportIsLeading = isLeading;
+  document.getElementById("tEstimateHint").textContent = isLeading
+    ? "⚠️ 這是當天第一段交通，沒有明確的出發座標可以算距離，時間需要手動輸入"
+    : "計程車/步行的預估時間會依直線距離自動估算（僅供參考），可自行修改";
   const manualWrap = document.getElementById("tManualDepartWrap");
   if(isLeading){
     const s = flightSettings || {};
@@ -2107,6 +2110,24 @@ async function deleteSpotWithAdjacentTransport(spot){
   }catch(e){ console.error("delete spot+transport failed", e); alert("刪除失敗，請檢查網路連線"); }
 }
 
+function recalcAdjacentTaxiWalkTransports(day, batch){
+  const arr = dayItems(day);
+  arr.forEach((it, idx)=>{
+    if(it.type==="transport" && (it.mode==="taxi" || it.mode==="walk")){
+      const prev = idx>0 ? arr[idx-1] : null;
+      const next = idx<arr.length-1 ? arr[idx+1] : null;
+      if(prev && next && prev.type==="spot" && next.type==="spot" && prev.lat!=null && next.lat!=null){
+        const km = haversineKm(prev.lat, prev.lng, next.lat, next.lng);
+        const mins = estimateDurationMinutes(it.mode, km);
+        if(mins && mins !== it.duration){
+          it.duration = mins;
+          batch.update(db.collection(COLLECTION).doc(it.id), { duration: mins });
+        }
+      }
+    }
+  });
+}
+
 async function moveSpot(spot, direction){
   const arr = dayItems(spot.day);
   const idx = arr.findIndex(i=>i.id===spot.id);
@@ -2116,20 +2137,28 @@ async function moveSpot(spot, direction){
   }
   if(neighborIdx<0 || neighborIdx>=arr.length) return;
   const neighbor = arr[neighborIdx];
+  const swapsFirstPosition = (idx===0 || neighborIdx===0);
+  const spotUpdate = { order: neighbor.order };
+  const neighborUpdate = { order: spot.order };
+  if(swapsFirstPosition){
+    // "出發時間" belongs to whichever spot sits in the first slot, not to
+    // the document itself — so when a reorder moves something into or out
+    // of that slot, the departTime has to travel with the position.
+    spotUpdate.departTime = neighbor.departTime || "";
+    neighborUpdate.departTime = spot.departTime || "";
+  }
+  // Apply the change to the local copy immediately (optimistic update) so
+  // that a second quick tap on ▲▼ before the network round-trip finishes
+  // computes against up-to-date data instead of a stale snapshot — that
+  // race was corrupting the order/departTime swap on fast repeated clicks.
+  Object.assign(spot, spotUpdate);
+  Object.assign(neighbor, neighborUpdate);
+  renderAll();
   try{
     const batch = db.batch();
-    const swapsFirstPosition = (idx===0 || neighborIdx===0);
-    const spotUpdate = { order: neighbor.order };
-    const neighborUpdate = { order: spot.order };
-    if(swapsFirstPosition){
-      // "出發時間" belongs to whichever spot sits in the first slot, not to
-      // the document itself — so when a reorder moves something into or out
-      // of that slot, the departTime has to travel with the position.
-      spotUpdate.departTime = neighbor.departTime || "";
-      neighborUpdate.departTime = spot.departTime || "";
-    }
     batch.update(db.collection(COLLECTION).doc(spot.id), spotUpdate);
     batch.update(db.collection(COLLECTION).doc(neighbor.id), neighborUpdate);
+    recalcAdjacentTaxiWalkTransports(spot.day, batch);
     await batch.commit();
   }catch(e){ console.error("move spot failed", e); alert("移動失敗，請檢查網路連線"); }
 }
@@ -2874,9 +2903,13 @@ function movePackItem(item, direction){
   const neighborIdx = idx + direction;
   if(neighborIdx<0 || neighborIdx>=arr.length) return;
   const neighbor = arr[neighborIdx];
+  const itemOrder = item.order, neighborOrder = neighbor.order;
+  item.order = neighborOrder;
+  neighbor.order = itemOrder;
+  renderPacking();
   db.batch()
-    .update(db.collection(COLLECTION).doc(item.id), { order: neighbor.order })
-    .update(db.collection(COLLECTION).doc(neighbor.id), { order: item.order })
+    .update(db.collection(COLLECTION).doc(item.id), { order: neighborOrder })
+    .update(db.collection(COLLECTION).doc(neighbor.id), { order: itemOrder })
     .commit()
     .catch(e=>{ console.error("move pack item failed", e); alert("移動失敗，請檢查網路連線"); });
 }
