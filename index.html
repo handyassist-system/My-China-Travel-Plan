@@ -474,7 +474,7 @@
         <label>出發時間（這是當天第一段交通，請自行設定）</label>
         <input id="tManualDepartTime" type="time">
       </div>
-      <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="請輸入分鐘數"></div>
+      <div class="field"><label>預估時間（分鐘）</label><input id="tDuration" type="number" placeholder="請輸入分鐘數"><p id="tDurationAutoNote" style="font-size:10.5px; margin:4px 0 0; display:none;"></p></div>
     </div>
     <div class="field" id="tArriveWrap" style="display:none;">
       <label>抵達時間（自動計算）</label>
@@ -1933,7 +1933,9 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, is
   selectedMode = it ? it.mode : "subway";
   transChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedMode));
   tDuration.value = it ? (it.duration||"") : "";
-  durationIsAutoEstimated = false;
+  durationIsAutoEstimated = true;
+  document.getElementById("tDurationAutoNote").style.display = "none";
+  updateDurationSourceNote();
   tExpAmount.value = it && it.expense ? (it.expense.amount||"") : "";
   setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : primaryCurrencyForTrip());
   populatePayerSelect(tExpPayer, tPayerWrap, it && it.expense ? it.expense.payer : "");
@@ -1988,16 +1990,32 @@ let currentTransportNextSpot = null;
 let currentTransportIsLeading = false;
 
 let durationIsAutoEstimated = false;
+function updateDurationSourceNote(){
+  const note = document.getElementById("tDurationAutoNote");
+  if(!tDuration.value){ note.style.display = "none"; return; }
+  if(durationIsAutoEstimated){
+    note.textContent = "🤖 系統依直線距離估算，可自行修改";
+    note.style.color = "var(--seal)";
+  } else {
+    note.textContent = "✏️ 你自行設定的時間";
+    note.style.color = "var(--sub)";
+  }
+  note.style.display = "block";
+}
 function applyDistanceEstimateIfEmpty(){
   if(tDuration.value && !durationIsAutoEstimated) return;
-  if(selectedMode!=="taxi" && selectedMode!=="walk"){ return; }
+  if(selectedMode!=="taxi" && selectedMode!=="walk"){ updateDurationSourceNote(); return; }
   const p = currentTransportPrevSpot, n = currentTransportNextSpot;
-  if(!p || !n || p.lat==null || n.lat==null) return;
+  if(!p || !n || p.lat==null || n.lat==null){ updateDurationSourceNote(); return; }
   const km = haversineKm(p.lat, p.lng, n.lat, n.lng);
   const mins = estimateDurationMinutes(selectedMode, km);
   if(mins){ tDuration.value = mins; durationIsAutoEstimated = true; }
+  updateDurationSourceNote();
 }
-tDuration.addEventListener("input", ()=>{ durationIsAutoEstimated = false; });
+tDuration.addEventListener("input", ()=>{
+  durationIsAutoEstimated = false;
+  updateDurationSourceNote();
+});
 
 function updateStationHint(){
   const el = document.getElementById("tStationHint");
