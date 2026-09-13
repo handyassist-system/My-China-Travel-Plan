@@ -1933,6 +1933,7 @@ function openTransportModal(it, prevTime, prevSpotOverride, nextSpotOverride, is
   selectedMode = it ? it.mode : "subway";
   transChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active", c.dataset.v===selectedMode));
   tDuration.value = it ? (it.duration||"") : "";
+  durationIsAutoEstimated = false;
   tExpAmount.value = it && it.expense ? (it.expense.amount||"") : "";
   setCurrencyChip(tCurrencyChips, it && it.expense ? it.expense.currency : primaryCurrencyForTrip());
   populatePayerSelect(tExpPayer, tPayerWrap, it && it.expense ? it.expense.payer : "");
@@ -1986,15 +1987,17 @@ let currentTransportPrevSpot = null;
 let currentTransportNextSpot = null;
 let currentTransportIsLeading = false;
 
+let durationIsAutoEstimated = false;
 function applyDistanceEstimateIfEmpty(){
-  if(tDuration.value) return;
-  if(selectedMode!=="taxi" && selectedMode!=="walk") return;
+  if(tDuration.value && !durationIsAutoEstimated) return;
+  if(selectedMode!=="taxi" && selectedMode!=="walk"){ return; }
   const p = currentTransportPrevSpot, n = currentTransportNextSpot;
   if(!p || !n || p.lat==null || n.lat==null) return;
   const km = haversineKm(p.lat, p.lng, n.lat, n.lng);
   const mins = estimateDurationMinutes(selectedMode, km);
-  if(mins) tDuration.value = mins;
+  if(mins){ tDuration.value = mins; durationIsAutoEstimated = true; }
 }
+tDuration.addEventListener("input", ()=>{ durationIsAutoEstimated = false; });
 
 function updateStationHint(){
   const el = document.getElementById("tStationHint");
