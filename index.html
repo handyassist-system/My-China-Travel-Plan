@@ -17,20 +17,20 @@
   onload="window.__gmapsStatus = 'loaded';" onerror="window.__gmapsStatus = 'load_error';"></script>
 <style>
   :root{
-    --paper:#F4EEE1;
-    --bg:#F4EEE1;
-    --card:#FBF7ED;
-    --ink:#2B2620;
-    --sub:#8C7F68;
-    --line:#E2D6BC;
-    --seal:#B3342B;
-    --accent:#B3342B;
-    --seal-soft:#F1DFD4;
-    --accent-soft:#F1DFD4;
+    --paper:#F5F6F8;
+    --bg:#F5F6F8;
+    --card:#FFFFFF;
+    --ink:#2D3238;
+    --sub:#8A93A0;
+    --line:#E7EAED;
+    --seal:#5B8A8E;
+    --accent:#5B8A8E;
+    --seal-soft:#E7F0F1;
+    --accent-soft:#E7F0F1;
     --gold:#B8862E;
-    --jade:#3F6B54;
-    --green:#3F6B54;
-    --green-soft:#E1EAE3;
+    --jade:#5B8A8E;
+    --green:#5B8A8E;
+    --green-soft:#E7F0F1;
     --radius-lg:20px;
     --radius-md:14px;
     --radius-sm:10px;
@@ -41,8 +41,6 @@
     margin:0; background:var(--paper); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;
     -webkit-font-smoothing:antialiased;
-    background-image:radial-gradient(rgba(179,52,43,0.035) 1px, transparent 1px);
-    background-size:14px 14px;
   }
   #app{max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; padding-bottom:78px;}
 
@@ -54,17 +52,14 @@
   .passport-frame{
     width:100%; max-width:300px; background:var(--card); border:1px solid var(--line);
     border-radius:var(--radius-lg); padding:36px 26px 30px; text-align:center;
-    box-shadow:0 16px 40px rgba(43,38,32,0.12); position:relative;
-  }
-  .passport-frame::before{
-    content:""; position:absolute; inset:8px; border:1px solid var(--seal-soft); border-radius:14px; pointer-events:none;
+    box-shadow:0 16px 40px rgba(45,50,56,0.08); position:relative;
   }
   .login-badge{
     width:64px; height:64px; border-radius:50%; background:var(--seal); color:#fff;
     display:flex; align-items:center; justify-content:center; font-size:24px;
     font-family:var(--serif); font-weight:700;
-    border:3px double rgba(255,255,255,0.55); box-shadow:0 10px 24px rgba(179,52,43,0.35);
-    transform:rotate(-6deg); margin:0 auto 16px;
+    box-shadow:0 10px 24px rgba(91,138,142,0.3);
+    margin:0 auto 16px;
   }
   #loginScreen h1{font-size:21px; margin:0 0 6px; font-family:var(--serif); letter-spacing:2px;}
   #loginScreen p.eyebrow{color:var(--sub); font-size:12px; margin:0 0 22px; letter-spacing:2px;}
@@ -99,21 +94,18 @@
   #editTripShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 0;}
   #swapDayShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
   #shareTripBtn{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
+  #exportWordBtn{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
 
   /* ---------- Day Tabs ---------- */
   #dayTabs{display:flex; gap:10px; overflow-x:auto; padding:14px 20px 8px; scrollbar-width:none;}
   #dayTabs::-webkit-scrollbar{display:none;}
   .tab{
-    flex:0 0 auto; padding:9px 18px; border-radius:8px; background:var(--card);
+    flex:0 0 auto; padding:9px 18px; border-radius:12px; background:var(--card);
     border:1px solid var(--line); color:var(--sub); font-size:14px; white-space:nowrap;
     font-family:var(--serif); font-weight:700; position:relative;
-    background-image:radial-gradient(circle at 0 50%, var(--paper) 5px, transparent 5.5px),
-                      radial-gradient(circle at 100% 50%, var(--paper) 5px, transparent 5.5px);
   }
   .tab.active{background-color:var(--seal); color:#fff; border-color:var(--seal);
-    background-image:radial-gradient(circle at 0 50%, var(--paper) 5px, transparent 5.5px),
-                      radial-gradient(circle at 100% 50%, var(--paper) 5px, transparent 5.5px);
-    box-shadow:0 4px 10px rgba(179,52,43,0.3);
+    box-shadow:0 4px 10px rgba(91,138,142,0.25);
   }
   .tab.add-day{color:var(--seal); border:1.5px dashed var(--seal); background:transparent; font-family:inherit; font-weight:600;}
 
@@ -124,8 +116,8 @@
 
   .spot-card{
     background:var(--card); border-radius:var(--radius-lg); padding:12px 14px 8px 12px;
-    border:1px solid var(--line); border-left:3px dashed var(--seal-soft);
-    display:flex; flex-direction:column; margin-bottom:4px;
+    border:1px solid var(--line); box-shadow:0 1px 3px rgba(45,50,56,0.04);
+    display:flex; flex-direction:column; margin-bottom:8px;
   }
   .spot-main{display:flex; gap:10px; align-items:flex-start;}
   .spot-time{font-size:12px; color:var(--sub); width:38px; flex-shrink:0; padding-top:2px; font-variant-numeric:tabular-nums;}
@@ -302,6 +294,7 @@
         <div id="dayDateLabel" class="day-date-label"></div>
         <div>
           <button id="shareTripBtn" style="display:none;">📤 分享</button>
+          <button id="exportWordBtn" style="display:none;">📄 存Word</button>
           <button id="swapDayShortcut" style="display:none;">⇄ 交換天數</button>
           <button id="editTripShortcut" style="display:none;">✎ 編輯行程</button>
         </div>
@@ -411,6 +404,15 @@
     <p id="placesStatus" style="font-size:11.5px; color:var(--seal); margin:-10px 0 12px; display:none;"></p>
     <div class="field"><label>地址（選填，會用來定位）</label><textarea id="fNote" placeholder="地址、營業時間（搜尋沒選到時，這欄會拿去查座標）"></textarea></div>
     <div class="field"><label>備註（選填，純記事，不影響定位）</label><textarea id="fMemo" placeholder="心得、注意事項、待確認的事..."></textarea></div>
+    <div class="field"><label>照片（選填，小圖參考用，例如菜單/地圖截圖）</label>
+      <input id="fPhotoInput" type="file" accept="image/*" style="display:none;">
+      <div id="fPhotoPreviewWrap" style="display:none; position:relative; width:100%; max-width:220px; margin-bottom:8px;">
+        <img id="fPhotoPreview" style="width:100%; border-radius:12px; display:block;">
+        <button type="button" id="fPhotoRemove" style="position:absolute; top:-8px; right:-8px; width:26px; height:26px; border-radius:50%; border:none; background:var(--seal); color:#fff; font-size:14px;">✕</button>
+      </div>
+      <button type="button" id="fPhotoPickBtn" style="width:100%; padding:12px; border:1px dashed var(--line); background:var(--bg); color:var(--sub); border-radius:var(--radius-md); font-size:13.5px;">📷 選擇照片</button>
+      <p id="fPhotoStatus" style="font-size:11px; color:var(--sub); margin:4px 0 0; display:none;"></p>
+    </div>
     <button type="button" id="fGeocodeBtn" style="width:100%; padding:10px; border:1px dashed var(--line); background:var(--bg); color:var(--sub); border-radius:var(--radius-md); font-size:12.5px; margin-bottom:6px;">📍 找不到名稱？用筆記裡的地址定位</button>
     <p id="fGeocodeStatus" style="font-size:11.5px; margin:-2px 0 12px; display:none;"></p>
     <button type="button" id="fExpToggle" style="width:100%; padding:11px; border:1px dashed var(--seal); background:var(--seal-soft); color:var(--seal); border-radius:var(--radius-md); font-size:13.5px; font-weight:600; margin-bottom:14px;">＋ 新增花費</button>
@@ -1013,14 +1015,21 @@ function renderMap(){
   canvas.innerHTML = "";
   mapInstance = new google.maps.Map(canvas, { zoom: 12, center:{lat:spots[0].lat,lng:spots[0].lng}, disableDefaultUI:true, zoomControl:true });
   const bounds = new google.maps.LatLngBounds();
+  const infoWindow = new google.maps.InfoWindow();
+  let seq = 0;
   daysToShow.forEach(d=>{
     const daySpots = dayItems(d).filter(i=>i.type==="spot" && i.lat!=null && i.lng!=null);
-    daySpots.forEach((s, idx)=>{
+    daySpots.forEach((s)=>{
+      seq++;
       const pos = { lat: s.lat, lng: s.lng };
-      new google.maps.Marker({
-        position: pos, map: mapInstance, title: `${d} #${idx+1} ${s.name}`,
-        label: { text: String(idx+1), color:"#fff", fontSize:"12px", fontWeight:"700" },
+      const marker = new google.maps.Marker({
+        position: pos, map: mapInstance, title: `${d} #${seq} ${s.name}`,
+        label: { text: String(seq), color:"#fff", fontSize:"12px", fontWeight:"700" },
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: colorForDay(d), fillOpacity: 1, strokeColor:"#fff", strokeWeight:2 }
+      });
+      marker.addListener("click", ()=>{
+        infoWindow.setContent(`<div style="font-family:inherit; padding:2px 4px;"><b>${seq}. ${escapeHtml(s.name)}</b><br><span style="color:#888; font-size:12px;">${d}${s.category ? " · "+escapeHtml(s.category) : ""}</span></div>`);
+        infoWindow.open(mapInstance, marker);
       });
       bounds.extend(pos);
     });
@@ -1051,6 +1060,7 @@ function renderItinerary(){
     document.getElementById("editTripShortcut").style.display = "none";
     document.getElementById("swapDayShortcut").style.display = "none";
     document.getElementById("shareTripBtn").style.display = "none";
+    document.getElementById("exportWordBtn").style.display = "none";
     const list = document.getElementById("list");
     list.innerHTML = "";
     list.appendChild(noTripCTA());
@@ -1062,6 +1072,7 @@ function renderItinerary(){
   document.getElementById("editTripShortcut").style.display = "block";
   document.getElementById("swapDayShortcut").style.display = days.length>1 ? "inline-block" : "none";
   document.getElementById("shareTripBtn").style.display = "inline-block";
+  document.getElementById("exportWordBtn").style.display = "inline-block";
 }
 function renderDayTabs(){
   const wrap = document.getElementById("dayTabs");
@@ -1246,6 +1257,7 @@ function buildSpotCard(it, d){
         <p class="spot-meta">${metaParts.join(" · ")}</p>
         ${it.note ? `<p class="spot-note">📍${escapeHtml(it.note)}</p>` : ""}
         ${it.memo ? `<p class="spot-note">📝${escapeHtml(it.memo)}</p>` : ""}
+        ${it.photo ? `<img src="${it.photo}" style="width:64px; height:64px; object-fit:cover; border-radius:8px; margin:4px 0 0; display:block;">` : ""}
         ${exp}
       </div>
     </div>
@@ -1342,6 +1354,59 @@ document.getElementById("fCustomCatConfirm").addEventListener("click", ()=>{
   selectedSpotCat = name;
   renderSpotCatChips();
 });
+
+let currentSpotPhoto = "";
+function compressImageFile(file, maxWidth){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=>reject(new Error("讀取檔案失敗"));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error("圖片格式無法解析"));
+      img.onload = ()=>{
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function setSpotPhotoPreview(dataUrl){
+  currentSpotPhoto = dataUrl || "";
+  document.getElementById("fPhotoPreviewWrap").style.display = currentSpotPhoto ? "block" : "none";
+  document.getElementById("fPhotoPickBtn").style.display = currentSpotPhoto ? "none" : "block";
+  if(currentSpotPhoto) document.getElementById("fPhotoPreview").src = currentSpotPhoto;
+}
+document.getElementById("fPhotoPickBtn").addEventListener("click", ()=>document.getElementById("fPhotoInput").click());
+document.getElementById("fPhotoRemove").addEventListener("click", ()=>setSpotPhotoPreview(""));
+document.getElementById("fPhotoInput").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const status = document.getElementById("fPhotoStatus");
+  status.style.display = "block"; status.textContent = "處理中...";
+  try{
+    const dataUrl = await compressImageFile(file, 500);
+    // Rough size guard: Firestore documents cap at 1MB total, keep photos
+    // well under that so the rest of the spot's fields always fit.
+    if(dataUrl.length > 700000){
+      status.textContent = "圖片壓縮後仍太大，請換一張較小的圖片";
+      return;
+    }
+    setSpotPhotoPreview(dataUrl);
+    status.style.display = "none";
+  }catch(err){
+    console.error("compress image failed", err);
+    status.textContent = "圖片處理失敗，請換一張試試";
+  }
+  e.target.value = "";
+});
+
 const fName = document.getElementById("fName");
 const fNote = document.getElementById("fNote");
 const fExpAmount = document.getElementById("fExpAmount");
@@ -1535,6 +1600,8 @@ function openSpotModal(spot){
   fName.value = spot ? spot.name : "";
   fNote.value = spot ? (spot.note||"") : "";
   document.getElementById("fMemo").value = spot ? (spot.memo||"") : "";
+  setSpotPhotoPreview(spot ? (spot.photo||"") : "");
+  document.getElementById("fPhotoStatus").style.display = "none";
   fExpAmount.value = spot && spot.expense ? (spot.expense.amount||"") : "";
   fExpCategory.value = spot && spot.expense ? (spot.expense.category||"餐飲") : "餐飲";
   setCurrencyChip(fCurrencyChips, spot && spot.expense ? spot.expense.currency : primaryCurrencyForTrip());
@@ -1624,7 +1691,7 @@ document.getElementById("spotSave").addEventListener("click", async ()=>{
     stayMinutes: document.getElementById("fStayMinutes").value ? Number(document.getElementById("fStayMinutes").value) : 0,
     lat: latLng ? latLng.lat : null,
     lng: latLng ? latLng.lng : null,
-    name, note: fNote.value.trim(), memo: document.getElementById("fMemo").value.trim(),
+    name, note: fNote.value.trim(), memo: document.getElementById("fMemo").value.trim(), photo: currentSpotPhoto,
     expense: { amount: fExpAmount.value ? Number(fExpAmount.value) : 0, category: fExpCategory.value, payer: fExpPayer.value||"", currency: getCurrencyChip(fCurrencyChips) }
   };
   try{
@@ -2051,8 +2118,18 @@ async function moveSpot(spot, direction){
   const neighbor = arr[neighborIdx];
   try{
     const batch = db.batch();
-    batch.update(db.collection(COLLECTION).doc(spot.id), { order: neighbor.order });
-    batch.update(db.collection(COLLECTION).doc(neighbor.id), { order: spot.order });
+    const swapsFirstPosition = (idx===0 || neighborIdx===0);
+    const spotUpdate = { order: neighbor.order };
+    const neighborUpdate = { order: spot.order };
+    if(swapsFirstPosition){
+      // "出發時間" belongs to whichever spot sits in the first slot, not to
+      // the document itself — so when a reorder moves something into or out
+      // of that slot, the departTime has to travel with the position.
+      spotUpdate.departTime = neighbor.departTime || "";
+      neighborUpdate.departTime = spot.departTime || "";
+    }
+    batch.update(db.collection(COLLECTION).doc(spot.id), spotUpdate);
+    batch.update(db.collection(COLLECTION).doc(neighbor.id), neighborUpdate);
     await batch.commit();
   }catch(e){ console.error("move spot failed", e); alert("移動失敗，請檢查網路連線"); }
 }
@@ -3000,7 +3077,7 @@ function buildShareText(){
         const isFirstSpot = spotIndex===0;
         const displayTime = isFirstSpot ? (it.departTime || d.arrival || "") : (d.arrival || "");
         const stayInfo = (d.arrival && it.stayMinutes) ? `停留${it.stayMinutes}分，${d.leave}離開` : "";
-        rows.push({ time: displayTime, name: it.name, transport: pendingTransportLabel, stayInfo });
+        rows.push({ time: displayTime, name: it.name, transport: pendingTransportLabel, stayInfo, note: it.note, memo: it.memo, photo: it.photo });
         pendingTransportLabel = null;
         spotIndex++;
       }
@@ -3030,6 +3107,80 @@ function buildShareText(){
   return lines.join("\n");
 }
 
+function buildShareHtml(){
+  const trip = getActiveTrip();
+  const s = flightSettings || {};
+  const esc = escapeHtml;
+  let html = `<h1 style="font-size:22px;">${esc(trip ? trip.name : "行程")}</h1>`;
+
+  if(s.outFlightNo || s.outFrom){
+    html += `<h3>✈️ 去程航班</h3><p>${esc(s.outAirline||"")} ${esc(s.outFlightNo||"")}　${esc(AIRPORTS[s.outFrom]||s.outFrom||"")} ${esc(s.outDepartTime||"--:--")} → ${esc(AIRPORTS[s.outTo]||s.outTo||"")} ${esc(s.outArriveTime||"--:--")}</p>`;
+  }
+
+  days.forEach(day=>{
+    const dateLabel = computeDateForDay(day);
+    html += `<h2 style="border-bottom:1px solid #ccc; padding-bottom:4px; margin-top:24px;">${esc(day)}${dateLabel ? "（"+esc(dateLabel)+"）" : ""}</h2>`;
+    const derived = computeDerivedTimes(day);
+    const arr = dayItems(day);
+    if(arr.length===0){ html += "<p>（尚未安排）</p>"; return; }
+
+    const rows = [];
+    let pendingTransportLabel = null;
+    let spotIndex = 0;
+    arr.forEach(it=>{
+      if(it.type==="transport"){
+        pendingTransportLabel = `${TRANSPORT_LABEL[it.mode]||""}${it.duration ? " 約"+it.duration+"分" : ""}`;
+      } else if(it.type==="spot"){
+        const d = derived[it.id] || {};
+        const isFirstSpot = spotIndex===0;
+        const displayTime = isFirstSpot ? (it.departTime || d.arrival || "") : (d.arrival || "");
+        const stayInfo = (d.arrival && it.stayMinutes) ? `停留${it.stayMinutes}分，${d.leave}離開` : "";
+        rows.push({ time: displayTime, name: it.name, transport: pendingTransportLabel, stayInfo, note: it.note, memo: it.memo, photo: it.photo });
+        pendingTransportLabel = null;
+        spotIndex++;
+      }
+    });
+
+    let lastGroup = null;
+    rows.forEach(row=>{
+      const group = timeOfDayLabel(row.time);
+      if(group !== lastGroup){
+        html += `<p style="color:#B3342B; font-weight:bold; margin:14px 0 4px;">── ${esc(group)} ──</p>`;
+        lastGroup = group;
+      }
+      const timeStr = row.time || "未定";
+      const extras = [row.transport, row.stayInfo].filter(Boolean).join("，");
+      const suffix = extras ? `（${esc(extras)}）` : "";
+      html += `<p style="margin:2px 0;"><b>${esc(timeStr)} ${esc(row.name)}</b>${suffix}</p>`;
+      if(row.note) html += `<p style="margin:0 0 2px; color:#555; font-size:13px;">📍${esc(row.note)}</p>`;
+      if(row.memo) html += `<p style="margin:0 0 2px; color:#555; font-size:13px;">📝${esc(row.memo)}</p>`;
+      if(row.photo) html += `<img src="${row.photo}" style="width:160px; border-radius:8px; margin:2px 0 8px; display:block;">`;
+    });
+  });
+
+  if(s.retFlightNo || s.retFrom){
+    html += `<h3>✈️ 回程航班</h3><p>${esc(s.retAirline||"")} ${esc(s.retFlightNo||"")}　${esc(AIRPORTS[s.retFrom]||s.retFrom||"")} ${esc(s.retDepartTime||"--:--")} → ${esc(AIRPORTS[s.retTo]||s.retTo||"")} ${esc(s.retArriveTime||"--:--")}</p>`;
+  }
+  return html;
+}
+
+function downloadItineraryAsWord(){
+  const trip = getActiveTrip();
+  const bodyHtml = buildShareHtml();
+  const doc = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset="utf-8"><title>${escapeHtml(trip ? trip.name : "行程")}</title></head>
+<body style="font-family:'Microsoft JhengHei',sans-serif;">${bodyHtml}</body></html>`;
+  const blob = new Blob(['\ufeff', doc], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(trip ? trip.name : "行程")}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
 document.getElementById("shareTripBtn").addEventListener("click", async ()=>{
   const text = buildShareText();
   const trip = getActiveTrip();
@@ -3045,6 +3196,10 @@ document.getElementById("shareTripBtn").addEventListener("click", async ()=>{
       alert("無法自動複製，請手動選取以下內容：\n\n"+text);
     }
   }
+});
+document.getElementById("exportWordBtn").addEventListener("click", ()=>{
+  try{ downloadItineraryAsWord(); }
+  catch(e){ console.error("export word failed", e); alert("匯出失敗，請再試一次"); }
 });
 
 function openTripModal(trip){
