@@ -75,11 +75,6 @@
   }
   #loginError{color:var(--seal); font-size:13px; height:16px; margin-top:4px;}
 
-  #logoutBtn{
-    background:none; border:1px solid var(--line); color:var(--sub); font-size:11.5px;
-    padding:5px 12px; border-radius:999px;
-  }
-
   /* ---------- Header ---------- */
   header{padding:22px 20px 4px; position:sticky; top:0; background:var(--paper); z-index:10;}
   header h1{font-size:22px; margin:0 0 8px; font-family:var(--serif); font-weight:700; letter-spacing:1px;}
@@ -91,10 +86,17 @@
   .day-date-label{padding:0 20px; font-size:12px; color:var(--sub); margin-top:-2px;}
   .day-date-row{display:flex; align-items:center; justify-content:space-between; padding:0 20px; margin-top:-2px;}
   .day-date-row .day-date-label{padding:0;}
-  #editTripShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 0;}
-  #swapDayShortcut{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
-  #shareTripBtn{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
-  #exportWordBtn{background:none; border:none; color:var(--sub); font-size:11.5px; padding:2px 8px 2px 0;}
+  .settings-menu-item{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    color:var(--ink); font-size:14px; padding:13px 16px; font-family:inherit;
+  }
+  .settings-menu-item:active{background:var(--bg);}
+  .icon-pill-btn{
+    width:34px; height:34px; border-radius:50%; border:1px solid var(--line);
+    background:var(--card); color:var(--seal); font-size:15px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .icon-pill-btn:active{background:var(--seal-soft);}
 
   /* ---------- Day Tabs ---------- */
   #dayTabs{display:flex; gap:10px; overflow-x:auto; padding:14px 20px 8px; scrollbar-width:none;}
@@ -281,9 +283,15 @@
 
   <div id="mainScreen" style="display:none;">
     <header>
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <h1 id="pageTitle">行程</h1>
-        <button id="logoutBtn" title="登出">登出</button>
+      <div style="display:flex; align-items:center; justify-content:space-between; position:relative;">
+        <h1 id="pageTitle">📅 行程</h1>
+        <button id="settingsBtn" title="設定" style="background:none; border:none; font-size:20px; padding:4px 8px;">⚙️</button>
+        <div id="settingsMenu" style="display:none; position:absolute; top:36px; right:0; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 10px 30px rgba(45,50,56,0.12); min-width:180px; z-index:30; overflow:hidden;">
+          <button id="shareTripBtn" class="settings-menu-item" style="display:none;">📤 分享行程</button>
+          <button id="exportWordBtn" class="settings-menu-item" style="display:none;">📄 匯出</button>
+          <div style="height:1px; background:var(--line);"></div>
+          <button id="logoutBtn" class="settings-menu-item" title="登出">🚪 登出</button>
+        </div>
       </div>
       <button id="tripSelBtn" class="trip-sel">目前：<span id="tripSelName">—</span> ▾</button>
     </header>
@@ -292,11 +300,9 @@
       <div id="dayTabs"></div>
       <div class="day-date-row">
         <div id="dayDateLabel" class="day-date-label"></div>
-        <div>
-          <button id="shareTripBtn" style="display:none;">📤 分享</button>
-          <button id="exportWordBtn" style="display:none;">📄 存Word</button>
-          <button id="swapDayShortcut" style="display:none;">⇄ 交換天數</button>
-          <button id="editTripShortcut" style="display:none;">✎ 編輯行程</button>
+        <div style="display:flex; gap:6px;">
+          <button id="swapDayShortcut" class="icon-pill-btn" style="display:none;">⇄</button>
+          <button id="editTripShortcut" class="icon-pill-btn" style="display:none;">✎</button>
         </div>
       </div>
       <div id="list"></div>
@@ -776,6 +782,20 @@ document.getElementById("logoutBtn").addEventListener("click", ()=>{
   location.reload();
 });
 
+const settingsMenu = document.getElementById("settingsMenu");
+document.getElementById("settingsBtn").addEventListener("click", (e)=>{
+  e.stopPropagation();
+  settingsMenu.style.display = settingsMenu.style.display==="block" ? "none" : "block";
+});
+document.addEventListener("click", (e)=>{
+  if(settingsMenu.style.display==="block" && !settingsMenu.contains(e.target) && e.target.id!=="settingsBtn"){
+    settingsMenu.style.display = "none";
+  }
+});
+settingsMenu.querySelectorAll(".settings-menu-item").forEach(btn=>{
+  btn.addEventListener("click", ()=>{ settingsMenu.style.display = "none"; });
+});
+
 // ---------- Firestore listener ----------
 function startListening(){
   if(unsubscribe) return;
@@ -940,7 +960,7 @@ function renderAll(){
   document.getElementById("memoFab").style.alignItems = "center";
   document.getElementById("memoFab").style.justifyContent = "center";
 
-  const titles = { itinerary:"行程", expense:"花費彙整", flight:"航班", packing:"採買清單", map:"地圖" };
+  const titles = { itinerary:"📅 行程", expense:"💰 花費彙整", flight:"✈️ 航班", packing:"🛍️ 採買清單", map:"🗺️ 地圖" };
   document.getElementById("pageTitle").textContent = titles[currentTab];
 
   if(currentTab==="itinerary") renderItinerary();
@@ -1068,10 +1088,10 @@ function renderItinerary(){
   renderDayTabs();
   renderDayList();
   document.getElementById("dayDateLabel").textContent = computeDateForDay(currentDay);
-  document.getElementById("editTripShortcut").style.display = "block";
-  document.getElementById("swapDayShortcut").style.display = days.length>1 ? "inline-block" : "none";
-  document.getElementById("shareTripBtn").style.display = "inline-block";
-  document.getElementById("exportWordBtn").style.display = "inline-block";
+  document.getElementById("editTripShortcut").style.display = "flex";
+  document.getElementById("swapDayShortcut").style.display = days.length>1 ? "flex" : "none";
+  document.getElementById("shareTripBtn").style.display = "block";
+  document.getElementById("exportWordBtn").style.display = "block";
 }
 function renderDayTabs(){
   const wrap = document.getElementById("dayTabs");
@@ -1774,10 +1794,20 @@ function haversineKm(lat1, lng1, lat2, lng2){
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 function estimateDurationMinutes(mode, km){
-  const speedKmh = mode==="walk" ? 4.5 : mode==="taxi" ? 20 : null;
-  if(!speedKmh) return null;
-  const routingFactor = 1.3; // roads aren't straight lines
-  return Math.max(1, Math.round((km*routingFactor) / speedKmh * 60));
+  if(mode==="walk" || mode==="taxi"){
+    const speedKmh = mode==="walk" ? 4.5 : 20;
+    const routingFactor = 1.3; // roads aren't straight lines
+    return Math.max(1, Math.round((km*routingFactor) / speedKmh * 60));
+  }
+  if(mode==="subway" || mode==="jr"){
+    // Rougher: rail lines curve/detour far more than roads do, so this is
+    // a bigger approximation. Effective speed already bakes in stops.
+    const speedKmh = 28;
+    const routingFactor = 1.5;
+    const stationBuffer = 10; // walking into/out of the station + waiting
+    return Math.max(3, Math.round((km*routingFactor) / speedKmh * 60) + stationBuffer);
+  }
+  return null;
 }
 
 // Approximate coordinates of major Shanghai metro stations (for "nearest station" hints only)
@@ -1994,7 +2024,10 @@ function updateDurationSourceNote(){
   const note = document.getElementById("tDurationAutoNote");
   if(!tDuration.value){ note.style.display = "none"; return; }
   if(durationIsAutoEstimated){
-    note.textContent = "🤖 系統依直線距離估算，可自行修改";
+    const isRail = (selectedMode==="subway" || selectedMode==="jr");
+    note.textContent = isRail
+      ? "🤖 系統粗估（含轉乘/繞路可能誤差較大），可自行修改"
+      : "🤖 系統依直線距離估算，可自行修改";
     note.style.color = "var(--seal)";
   } else {
     note.textContent = "✏️ 你自行設定的時間";
@@ -2004,7 +2037,7 @@ function updateDurationSourceNote(){
 }
 function applyDistanceEstimateIfEmpty(){
   if(tDuration.value && !durationIsAutoEstimated) return;
-  if(selectedMode!=="taxi" && selectedMode!=="walk"){ updateDurationSourceNote(); return; }
+  if(selectedMode==="train"){ updateDurationSourceNote(); return; }
   const p = currentTransportPrevSpot, n = currentTransportNextSpot;
   if(!p || !n || p.lat==null || n.lat==null){ updateDurationSourceNote(); return; }
   const km = haversineKm(p.lat, p.lng, n.lat, n.lng);
@@ -3165,15 +3198,34 @@ function buildShareHtml(){
   const trip = getActiveTrip();
   const s = flightSettings || {};
   const esc = escapeHtml;
-  let html = `<h1 style="font-size:22px;">${esc(trip ? trip.name : "行程")}</h1>`;
+  const seal = "#5B8A8E";
+  let html = `<h1 style="font-size:22px; margin-bottom:2px;">${esc(trip ? trip.name : "行程")}</h1>`;
 
-  if(s.outFlightNo || s.outFrom){
-    html += `<h3>✈️ 去程航班</h3><p>${esc(s.outAirline||"")} ${esc(s.outFlightNo||"")}　${esc(AIRPORTS[s.outFrom]||s.outFrom||"")} ${esc(s.outDepartTime||"--:--")} → ${esc(AIRPORTS[s.outTo]||s.outTo||"")} ${esc(s.outArriveTime||"--:--")}</p>`;
+  if(trip && trip.startDate && trip.endDate){
+    html += `<p style="color:#777; margin:0 0 10px;">${esc(trip.startDate)} ～ ${esc(trip.endDate)}</p>`;
+  }
+  if(trip && trip.notes){
+    html += `<p style="background:#F5F6F8; border-radius:8px; padding:8px 12px; color:#444; font-size:13px; white-space:pre-wrap;">📝 ${esc(trip.notes)}</p>`;
+  }
+
+  if(s.outFlightNo || s.outFrom || s.retFlightNo || s.retFrom){
+    html += `<table style="width:100%; border-collapse:collapse; margin:10px 0 20px;"><tr>`;
+    if(s.outFlightNo || s.outFrom){
+      html += `<td style="width:50%; padding:10px 14px; background:#F5F6F8; border-radius:8px; vertical-align:top;">
+        <b>✈️ 去程</b><br>${esc(s.outAirline||"")} ${esc(s.outFlightNo||"")}<br>${esc(AIRPORTS[s.outFrom]||s.outFrom||"")} ${esc(s.outDepartTime||"--:--")} → ${esc(AIRPORTS[s.outTo]||s.outTo||"")} ${esc(s.outArriveTime||"--:--")}
+      </td><td style="width:12px;"></td>`;
+    }
+    if(s.retFlightNo || s.retFrom){
+      html += `<td style="width:50%; padding:10px 14px; background:#F5F6F8; border-radius:8px; vertical-align:top;">
+        <b>✈️ 回程</b><br>${esc(s.retAirline||"")} ${esc(s.retFlightNo||"")}<br>${esc(AIRPORTS[s.retFrom]||s.retFrom||"")} ${esc(s.retDepartTime||"--:--")} → ${esc(AIRPORTS[s.retTo]||s.retTo||"")} ${esc(s.retArriveTime||"--:--")}
+      </td>`;
+    }
+    html += `</tr></table>`;
   }
 
   days.forEach(day=>{
     const dateLabel = computeDateForDay(day);
-    html += `<h2 style="border-bottom:1px solid #ccc; padding-bottom:4px; margin-top:24px;">${esc(day)}${dateLabel ? "（"+esc(dateLabel)+"）" : ""}</h2>`;
+    html += `<div style="background:${seal}; color:#fff; padding:9px 14px; border-radius:8px; font-weight:bold; margin:18px 0 8px;">${esc(day)}${dateLabel ? "（"+esc(dateLabel)+"）" : ""}</div>`;
     const derived = computeDerivedTimes(day);
     const arr = dayItems(day);
     if(arr.length===0){ html += "<p>（尚未安排）</p>"; return; }
@@ -3183,7 +3235,7 @@ function buildShareHtml(){
     let spotIndex = 0;
     arr.forEach(it=>{
       if(it.type==="transport"){
-        pendingTransportLabel = `${TRANSPORT_LABEL[it.mode]||""}${it.duration ? " 約"+it.duration+"分" : ""}`;
+        pendingTransportLabel = `${TRANSPORT_ICON[it.mode]||""}${TRANSPORT_LABEL[it.mode]||""}${it.duration ? " 約"+it.duration+"分" : ""}`;
       } else if(it.type==="spot"){
         const d = derived[it.id] || {};
         const isFirstSpot = spotIndex===0;
@@ -3195,26 +3247,29 @@ function buildShareHtml(){
       }
     });
 
-    let lastGroup = null;
-    rows.forEach(row=>{
-      const group = timeOfDayLabel(row.time);
-      if(group !== lastGroup){
-        html += `<p style="color:#B3342B; font-weight:bold; margin:14px 0 4px;">── ${esc(group)} ──</p>`;
-        lastGroup = group;
-      }
-      const timeStr = row.time || "未定";
-      const extras = [row.transport, row.stayInfo].filter(Boolean).join("，");
-      const suffix = extras ? `（${esc(extras)}）` : "";
-      html += `<p style="margin:2px 0;"><b>${esc(timeStr)} ${esc(row.name)}</b>${suffix}</p>`;
-      if(row.note) html += `<p style="margin:0 0 2px; color:#555; font-size:13px;">📍${esc(row.note)}</p>`;
-      if(row.memo) html += `<p style="margin:0 0 2px; color:#555; font-size:13px;">📝${esc(row.memo)}</p>`;
-      if(row.photo) html += `<img src="${row.photo}" style="width:160px; border-radius:8px; margin:2px 0 8px; display:block;">`;
+    html += `<table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+      <tr style="background:#EFF2F3;">
+        <th style="text-align:left; padding:7px 8px; font-size:12px; width:60px; border-bottom:2px solid ${seal};">時間</th>
+        <th style="text-align:left; padding:7px 8px; font-size:12px; width:26%; border-bottom:2px solid ${seal};">地點</th>
+        <th style="text-align:left; padding:7px 8px; font-size:12px; border-bottom:2px solid ${seal};">備註</th>
+      </tr>`;
+    rows.forEach((row, idx)=>{
+      const noteLines = [];
+      if(row.transport) noteLines.push(row.transport);
+      if(row.stayInfo) noteLines.push(row.stayInfo);
+      if(row.note) noteLines.push("📍"+row.note);
+      if(row.memo) noteLines.push("📝"+row.memo);
+      const noteHtml = noteLines.map(l=>esc(l)).join("<br>");
+      const bg = idx%2===0 ? "#FFFFFF" : "#FAFBFB";
+      html += `<tr style="background:${bg};">
+        <td style="padding:8px; font-size:13px; vertical-align:top; border-bottom:1px solid #EEE;"><b>${esc(row.time || "未定")}</b></td>
+        <td style="padding:8px; font-size:13px; vertical-align:top; border-bottom:1px solid #EEE;">${esc(row.name)}</td>
+        <td style="padding:8px; font-size:12.5px; color:#555; vertical-align:top; border-bottom:1px solid #EEE;">${noteHtml}${row.photo ? `<br><img src="${row.photo}" style="width:120px; border-radius:6px; margin-top:4px;">` : ""}</td>
+      </tr>`;
     });
+    html += `</table>`;
   });
 
-  if(s.retFlightNo || s.retFrom){
-    html += `<h3>✈️ 回程航班</h3><p>${esc(s.retAirline||"")} ${esc(s.retFlightNo||"")}　${esc(AIRPORTS[s.retFrom]||s.retFrom||"")} ${esc(s.retDepartTime||"--:--")} → ${esc(AIRPORTS[s.retTo]||s.retTo||"")} ${esc(s.retArriveTime||"--:--")}</p>`;
-  }
   return html;
 }
 
