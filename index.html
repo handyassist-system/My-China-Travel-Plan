@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html-docx-js/dist/html-docx.js"></script>
 <script>
   window.__gmapsStatus = "loading";
   window.gm_authFailure = function(){ window.__gmapsStatus = "auth_failed"; };
@@ -3279,11 +3280,29 @@ function downloadItineraryAsWord(){
   const doc = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
 <head><meta charset="utf-8"><title>${escapeHtml(trip ? trip.name : "行程")}</title></head>
 <body style="font-family:'Microsoft JhengHei',sans-serif;">${bodyHtml}</body></html>`;
+  const filenameBase = trip ? trip.name : "行程";
+
+  if(window.htmlDocx && typeof htmlDocx.asBlob === "function"){
+    try{
+      const blob = htmlDocx.asBlob(doc);
+      triggerDownload(blob, `${filenameBase}.docx`);
+      return;
+    }catch(e){
+      console.error("html-docx-js conversion failed, falling back", e);
+    }
+  }
+  // Fallback: HTML-labelled-as-.doc. Desktop Word opens this fine, but some
+  // mobile Word apps / Google Docs / WPS refuse it since it isn't a real
+  // .docx. Only reached if the docx library failed to load (e.g. offline).
+  alert("真正的Word產生工具沒載入成功（可能網路問題），改用相容性較差的備用格式，手機版Word App可能開不起來。");
   const blob = new Blob(['\ufeff', doc], { type: "application/msword" });
+  triggerDownload(blob, `${filenameBase}.doc`);
+}
+function triggerDownload(blob, filename){
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${(trip ? trip.name : "行程")}.doc`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
