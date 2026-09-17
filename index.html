@@ -9,7 +9,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html-docx-js/dist/html-docx.js"></script>
 <script>
   window.__gmapsStatus = "loading";
   window.gm_authFailure = function(){ window.__gmapsStatus = "auth_failed"; };
@@ -266,11 +265,18 @@
     padding:12px 14px; font-size:13px; line-height:1.5; margin-bottom:10px; font-weight:600;
   }
   .deadline-reminder b{font-size:15px;}
+  #printArea{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{display:block; position:absolute; top:0; left:0; width:100%; padding:20px;}
+  }
 </style>
 </head>
 <body>
 
 <div id="app">
+<div id="printArea"></div>
   <div id="loginScreen">
     <div class="passport-frame">
       <div class="login-badge">境</div>
@@ -289,7 +295,7 @@
         <button id="settingsBtn" title="設定" style="background:none; border:none; font-size:20px; padding:4px 8px;">⚙️</button>
         <div id="settingsMenu" style="display:none; position:absolute; top:36px; right:0; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 10px 30px rgba(45,50,56,0.12); min-width:180px; z-index:30; overflow:hidden;">
           <button id="shareTripBtn" class="settings-menu-item" style="display:none;">📤 分享行程</button>
-          <button id="exportWordBtn" class="settings-menu-item" style="display:none;">📄 匯出</button>
+          <button id="exportWordBtn" class="settings-menu-item" style="display:none;">🖨️ 列印／存PDF</button>
           <div style="height:1px; background:var(--line);"></div>
           <button id="logoutBtn" class="settings-menu-item" title="登出">🚪 登出</button>
         </div>
@@ -3275,38 +3281,9 @@ function buildShareHtml(){
 }
 
 function downloadItineraryAsWord(){
-  const trip = getActiveTrip();
   const bodyHtml = buildShareHtml();
-  const doc = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset="utf-8"><title>${escapeHtml(trip ? trip.name : "行程")}</title></head>
-<body style="font-family:'Microsoft JhengHei',sans-serif;">${bodyHtml}</body></html>`;
-  const filenameBase = trip ? trip.name : "行程";
-
-  if(window.htmlDocx && typeof htmlDocx.asBlob === "function"){
-    try{
-      const blob = htmlDocx.asBlob(doc);
-      triggerDownload(blob, `${filenameBase}.docx`);
-      return;
-    }catch(e){
-      console.error("html-docx-js conversion failed, falling back", e);
-    }
-  }
-  // Fallback: HTML-labelled-as-.doc. Desktop Word opens this fine, but some
-  // mobile Word apps / Google Docs / WPS refuse it since it isn't a real
-  // .docx. Only reached if the docx library failed to load (e.g. offline).
-  alert("真正的Word產生工具沒載入成功（可能網路問題），改用相容性較差的備用格式，手機版Word App可能開不起來。");
-  const blob = new Blob(['\ufeff', doc], { type: "application/msword" });
-  triggerDownload(blob, `${filenameBase}.doc`);
-}
-function triggerDownload(blob, filename){
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  document.getElementById("printArea").innerHTML = bodyHtml;
+  window.print();
 }
 
 document.getElementById("shareTripBtn").addEventListener("click", async ()=>{
